@@ -1,0 +1,72 @@
+import { useEffect } from 'react';
+import { useReadingStore } from '../../stores/useReadingStore';
+import { useSettingsStore } from '../../stores/useSettingsStore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+export const HorizontalReader = () => {
+  const { images, currentIndex, nextPage, prevPage } = useReadingStore();
+  const { readingDirection, fitMode } = useSettingsStore();
+  // const containerRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+         readingDirection === 'ltr' ? nextPage() : prevPage();
+      } else if (e.key === 'ArrowLeft') {
+         readingDirection === 'ltr' ? prevPage() : nextPage();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nextPage, prevPage, readingDirection]);
+
+  // Determine images to show (Double Spread Logic will go here later)
+  // For now, Single Page Horizontal
+  const currentImage = images[currentIndex];
+  
+  if (!currentImage) return null;
+
+  return (
+    <div className="w-full h-full relative flex items-center justify-center bg-black overflow-hidden group">
+      {/* Navigation Zones */}
+      <div className="absolute inset-y-0 left-0 w-1/4 z-10 cursor-pointer" onClick={() => readingDirection === 'ltr' ? prevPage() : nextPage()} title="Previous" />
+      <div className="absolute inset-y-0 right-0 w-1/4 z-10 cursor-pointer" onClick={() => readingDirection === 'ltr' ? nextPage() : prevPage()} title="Next" />
+      
+      {/* Navigation Indicators (Fade in on hover) */}
+      <button 
+        className="absolute left-4 z-20 p-2 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+        onClick={() => readingDirection === 'ltr' ? prevPage() : nextPage()}
+      >
+        <ChevronLeft size={32} />
+      </button>
+
+      <button 
+        className="absolute right-4 z-20 p-2 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+        onClick={() => readingDirection === 'ltr' ? nextPage() : prevPage()}
+      >
+        <ChevronRight size={32} />
+      </button>
+
+      {/* Image Render */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.img
+          key={currentImage}
+          src={currentImage?.startsWith('http') ? currentImage : `media:///${currentImage}`}
+          alt={`Page ${currentIndex + 1}`}
+          initial={{ opacity: 0, x: readingDirection === 'ltr' ? 20 : -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: readingDirection === 'ltr' ? -20 : 20 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className={`max-w-full max-h-full shadow-2xl ${fitMode === 'width' ? 'w-full object-contain' : fitMode === 'height' ? 'h-full object-contain' : 'object-contain'}`}
+        />
+      </AnimatePresence>
+
+      {/* Page Number */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-black/50 rounded-full text-white text-sm backdrop-blur-sm">
+        {currentIndex + 1} / {images.length}
+      </div>
+    </div>
+  );
+}
