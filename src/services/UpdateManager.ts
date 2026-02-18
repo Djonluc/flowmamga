@@ -4,7 +4,7 @@ import { ScraperService } from './ScraperService';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 
 export class UpdateManager {
-    static async checkForUpdates(seriesId: string) {
+    static async checkForUpdates(seriesId: string, limit?: number) {
         const library = useLibraryStore.getState();
         const series = library.series.find(s => s.id === seriesId);
         if (!series) return 0;
@@ -40,22 +40,33 @@ export class UpdateManager {
             console.log(`[UpdateManager] Max Local: ${maxLocal}. Remote Feed: ${remoteFeed.length} chapters.`);
 
             // 4. Find Missing Chapters
-            const missingChapters = remoteFeed.filter(remote => {
+            let missingChapters = remoteFeed.filter(remote => {
                 const remoteNum = parseFloat(remote.attributes.chapter || '0');
                 return remoteNum > maxLocal && !isNaN(remoteNum);
             });
+
+            // Sort by chapter number ascending to get the "next" chapters
+            missingChapters.sort((a, b) => {
+                const numA = parseFloat(a.attributes.chapter || '0');
+                const numB = parseFloat(b.attributes.chapter || '0');
+                return numA - numB;
+            });
+
+            if (limit && limit > 0) {
+                missingChapters = missingChapters.slice(0, limit);
+            }
 
             if (missingChapters.length === 0) {
                 console.log(`[UpdateManager] ${series.title} is up to date.`);
                 return 0;
             }
 
-            console.log(`[UpdateManager] Found ${missingChapters.length} new chapters for ${series.title}`);
+            console.log(`[UpdateManager] Found ${missingChapters.length} new chapters to download for ${series.title}`);
 
             // 5. Queue Download Job
             const updateJob: any = {
                 id: `${metadata.source.mangaId}-update-${Date.now()}`,
-                title: `Update: ${series.title}`,
+                title: `Update: ${series.title} (${missingChapters.length} ch)`,
                 coverUrl: series.cover || undefined,
                 totalChapters: missingChapters.length,
                 metadata: {

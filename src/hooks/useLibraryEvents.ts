@@ -6,13 +6,14 @@ import { useReadingStore } from '../stores/useReadingStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 
 export const useLibraryEvents = () => {
-  const { addMangaFolder } = useLibraryStore();
+  const { loadFromDb, addMangaFolder } = useLibraryStore();
   const { addFolder } = useVideoStore();
   const { openFolder } = useReadingStore();
   const { setActiveView } = useSettingsStore();
 
   useEffect(() => {
     let unlistenOpenPath: (() => void) | undefined;
+    let unlistenUpdate: (() => void) | undefined;
 
     const setupListeners = async () => {
       unlistenOpenPath = await listen<string>('open-path', async (event) => {
@@ -24,26 +25,30 @@ export const useLibraryEvents = () => {
           const isVideo = lowerPath.endsWith('.mp4') || lowerPath.endsWith('.mkv') || lowerPath.endsWith('.avi') || lowerPath.endsWith('.webm');
 
           if (isVideo) {
-              const parentPath = path.includes('\\') ? path.substring(0, path.lastIndexOf('\\')) : path;
-              await addFolder(parentPath);
-              setActiveView('videos');
+            const parentPath = path.includes('\\') ? path.substring(0, path.lastIndexOf('\\')) : path;
+            await addFolder(parentPath);
+            setActiveView('videos');
           } else {
-              // Assume manga folder or archive
-              await addMangaFolder(path);
-              setActiveView('library');
-              // Automatically open if it's a specific folder/archive
-              await openFolder(path);
+            await addMangaFolder(path);
+            setActiveView('library');
+            await openFolder(path);
           }
         } catch (err) {
           console.error('[Native] Failed to auto-import path:', err);
         }
+      });
+
+      unlistenUpdate = await listen('library:updated', async () => {
+        console.log('[Native] Library updated event received');
+        await loadFromDb();
       });
     };
 
     setupListeners();
 
     return () => {
-      if (unlistenOpenPath) unlistenOpenPath();
+      unlistenOpenPath?.();
+      unlistenUpdate?.();
     };
-  }, [addMangaFolder, addFolder, openFolder, setActiveView]);
+  }, [addMangaFolder, addFolder, openFolder, setActiveView, loadFromDb]);
 };

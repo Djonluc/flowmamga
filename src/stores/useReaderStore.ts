@@ -1,7 +1,14 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { useSettingsStore } from './useSettingsStore';
 
 export type ReaderMode = 'vertical' | 'single' | 'slideshow';
+
+interface SeriesSettings {
+  speed: number;
+  mode: ReaderMode;
+  zoom: number;
+}
 
 interface ReaderState {
   // Mode & Navigation
@@ -12,53 +19,126 @@ interface ReaderState {
   // Auto-Scroll (Vertical)
   autoScroll: boolean;
   scrollSpeed: number; // pixels per second
+  zoomLevel: number;
+  isBoosted: boolean;
   
   // Slideshow
   slideshowActive: boolean;
-  slideshowDelay: number; // ms
   
+  // Per-series configuration memory
+  seriesConfigs: Record<string, SeriesSettings>;
+
   // Actions
   setMode: (mode: ReaderMode) => void;
   setCurrentPage: (page: number) => void;
   setAutoScroll: (active: boolean) => void;
   setScrollSpeed: (speed: number) => void;
+  setZoomLevel: (zoom: number) => void;
   setSlideshowActive: (active: boolean) => void;
-  setSlideshowDelay: (delay: number) => void;
-  
-  // Syncing with data store
   setTotalPages: (total: number) => void;
+  setIsBoosted: (boosted: boolean) => void;
+  
+  // Memory Management
+  activeSeriesId: string | null;
+  loadSeriesConfig: (seriesId: string) => void;
+  saveSeriesConfig: (seriesId: string) => void;
+  
+  // HUD Feedback
+  feedback: { type: 'speed' | 'mode' | 'zoom', value: string } | null;
+  setFeedback: (feedback: { type: 'speed' | 'mode' | 'zoom', value: string } | null) => void;
 }
 
-export const useReaderStore = create<ReaderState>((set) => ({
-  mode: 'vertical',
-  currentPage: 0,
-  totalPages: 0,
-  
-  autoScroll: false,
-  scrollSpeed: 40,
-  
-  slideshowActive: false,
-  slideshowDelay: 3000,
-  
-  setMode: (mode) => {
-      // Sync with settings store if needed, but primary is here now
-      useSettingsStore.getState().setReadingMode(mode as any);
-      set({ 
-          mode, 
-          autoScroll: false, 
-          slideshowActive: false 
-      });
-  },
-  
-  setCurrentPage: (currentPage) => set({ currentPage }),
-  
-  setAutoScroll: (autoScroll) => set({ autoScroll }),
-  
-  setScrollSpeed: (scrollSpeed) => set({ scrollSpeed }),
-  
-  setSlideshowActive: (slideshowActive) => set({ slideshowActive }),
-  
-  setSlideshowDelay: (slideshowDelay) => set({ slideshowDelay }),
-  
-  setTotalPages: (totalPages) => set({ totalPages }),
-}));
+export const useReaderStore = create<ReaderState>()(
+  persist(
+    (set, get) => ({
+      mode: 'vertical',
+      currentPage: 0,
+      totalPages: 0,
+      autoScroll: false,
+      scrollSpeed: 40,
+      zoomLevel: 100,
+      isBoosted: false,
+      
+      slideshowActive: false,
+      
+      seriesConfigs: {},
+      activeSeriesId: null,
+      feedback: null,
+      
+      setMode: (mode) => {
+          useSettingsStore.getState().setReadingMode(mode as any);
+          set({ 
+              mode, 
+              autoScroll: false, 
+              slideshowActive: false 
+          });
+          const { activeSeriesId, saveSeriesConfig } = get();
+          if (activeSeriesId) saveSeriesConfig(activeSeriesId);
+          get().setFeedback({ type: 'mode', value: mode.toUpperCase() });
+      },
+      
+      setCurrentPage: (currentPage) => set({ currentPage }),
+      setAutoScroll: (autoScroll) => set({ autoScroll }),
+      setScrollSpeed: (scrollSpeed) => {
+          const s = Math.max(1, scrollSpeed);
+          set({ scrollSpeed: s });
+          const { activeSeriesId, saveSeriesConfig } = get();
+          if (activeSeriesId) saveSeriesConfig(activeSeriesId);
+          get().setFeedback({ type: 'speed', value: `${s}px/s` });
+      },
+      setZoomLevel: (zoomLevel) => {
+          const z = Math.max(10, Math.min(500, zoomLevel));
+          set({ zoomLevel: z });
+          const { activeSeriesId, saveSeriesConfig } = get();
+          if (activeSeriesId) saveSeriesConfig(activeSeriesId);
+          get().setFeedback({ type: 'zoom', value: `${z}%` });
+      },
+      setSlideshowActive: (slideshowActive) => set({ slideshowActive }),
+      setTotalPages: (totalPages) => set({ totalPages }),
+      setIsBoosted: (isBoosted) => set({ isBoosted }),
+
+      setFeedback: (feedback) => {
+          set({ feedback });
+          // Auto-clear
+          if (feedback) {
+              setTimeout(() => {
+                  if (get().feedback?.value === feedback.value) {
+                      set({ feedback: null });
+                  }
+              }, 2000);
+          }
+      },
+
+      loadSeriesConfig: (seriesId) => {
+          const config = get().seriesConfigs[seriesId];
+          set({ activeSeriesId: seriesId });
+          if (config) {
+              set({
+                  mode: config.mode,
+                  scrollSpeed: config.speed,
+                  zoomLevel: config.zoom,
+                  autoScroll: false
+              });
+          }
+      },
+
+      saveSeriesConfig: (seriesId) => {
+          const { mode, scrollSpeed, zoomLevel, seriesConfigs } = get();
+          set({
+              seriesConfigs: {
+                  ...seriesConfigs,
+                  [seriesId]: {
+                      mode,
+                      speed: scrollSpeed,
+                      zoom: zoomLevel
+                  }
+              }
+          });
+      }
+    }),
+    {
+      name: 'reader-storage',
+    }
+  )
+);
+

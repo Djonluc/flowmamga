@@ -18,7 +18,13 @@ export const ControlPanel = () => {
     brightness, setBrightness,
     contrast, setContrast,
     saturation, setSaturation,
-    toggleShortcuts
+    toggleShortcuts,
+    // Ambient
+    ambientMode, setAmbientMode,
+    ambientIntensity, setAmbientIntensity,
+    ambientBlur, setAmbientBlur,
+    ambientBrightness, setAmbientBrightness,
+    showAmbientNoise, setAmbientNoise
   } = useSettingsStore();
   
   const { images } = useReadingStore();
@@ -170,6 +176,90 @@ export const ControlPanel = () => {
                                     {mode}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* Ambient Background Section */}
+                    <div className="space-y-4 pt-4 border-t border-white/10">
+                        <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Ambient Background</label>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-4">
+                            {/* Mode Selection */}
+                            <div className="grid grid-cols-3 gap-1.5">
+                                {(['blurred-page', 'blurred-cover', 'solid', 'gradient', 'oled'] as const).map((mode) => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setAmbientMode(mode)}
+                                        className={clsx(
+                                            "py-2 rounded-lg text-[10px] font-bold uppercase transition-all border border-transparent",
+                                            ambientMode === mode 
+                                                ? "bg-white text-black shadow-lg shadow-white/10" 
+                                                : "bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white"
+                                        )}
+                                    >
+                                        {mode.replace('-', ' ')}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            {ambientMode !== 'oled' && ambientMode !== 'solid' && (
+                                <motion.div 
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    className="space-y-4 pt-2"
+                                >
+                                    <div className="space-y-2">
+                                         <div className="flex justify-between text-[10px] text-neutral-400 font-bold uppercase tracking-widest">
+                                            <span>Intensity</span>
+                                            <span className="text-white">{Math.round(ambientIntensity * 100)}%</span>
+                                         </div>
+                                         <input 
+                                            type="range" min="0" max="1" step="0.05"
+                                            value={ambientIntensity}
+                                            onChange={(e) => setAmbientIntensity(parseFloat(e.target.value))}
+                                            className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
+                                         />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                         <div className="flex justify-between text-[10px] text-neutral-400 font-bold uppercase tracking-widest">
+                                            <span>Blur Radius</span>
+                                            <span className="text-white">{ambientBlur}px</span>
+                                         </div>
+                                         <input 
+                                            type="range" min="0" max="100" step="5"
+                                            value={ambientBlur}
+                                            onChange={(e) => setAmbientBlur(parseFloat(e.target.value))}
+                                            className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
+                                         />
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                         <div className="flex justify-between text-[10px] text-neutral-400 font-bold uppercase tracking-widest">
+                                            <span>Brightness</span>
+                                            <span className="text-white">{Math.round(ambientBrightness * 100)}%</span>
+                                         </div>
+                                         <input 
+                                            type="range" min="0" max="1" step="0.05"
+                                            value={ambientBrightness}
+                                            onChange={(e) => setAmbientBrightness(parseFloat(e.target.value))}
+                                            className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
+                                         />
+                                    </div>
+
+                                     <div className="flex items-center justify-between pt-1">
+                                        <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Film Grain</span>
+                                        <button 
+                                            onClick={() => setAmbientNoise(!showAmbientNoise)}
+                                            className={clsx(
+                                                "w-10 h-5 rounded-full transition-colors relative border",
+                                                showAmbientNoise ? "bg-white border-white" : "bg-transparent border-white/20"
+                                            )}
+                                        >
+                                            <div className={clsx("absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-black rounded-full transition-transform shadow-sm", showAmbientNoise ? "translate-x-5 bg-black" : "bg-white/40")} />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
                         </div>
                     </div>
 

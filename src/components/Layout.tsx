@@ -5,9 +5,9 @@ import { useSettingsStore } from '../stores/useSettingsStore';
 import { ToastContainer } from './Toast';
 import { ShortcutsGuide } from './ShortcutsGuide';
 import { ShortcutsManager } from './ShortcutsManager';
-import { AmbientBackground } from './AmbientBackground';
-import { AmbientSoundPlayer } from './AmbientSoundPlayer';
 import { CommandPalette } from './CommandPalette';
+import { DownloadPanel } from './DownloadPanel';
+import { SettingsModal } from './settings/SettingsModal';
 
 interface LayoutProps {
     children: ReactNode;
@@ -19,16 +19,16 @@ export const Layout = ({ children, hideSidebar = false }: LayoutProps) => {
 
     return (
         <div 
-            className="h-screen w-screen overflow-hidden bg-background text-foreground transition-colors duration-300 relative flex flex-row" 
+            className="h-screen w-screen overflow-hidden bg-transparent text-foreground transition-colors duration-300 relative flex flex-row" 
             data-theme={theme}
         >
             {/* Global Systems */}
             <CommandPalette />
-            <AmbientBackground />
-            <AmbientSoundPlayer />
             <ShortcutsManager />
             <ShortcutsGuide />
             <ToastContainer />
+            <DownloadPanel />
+            <SettingsModal />
 
             {/* V3 Layout Roots */}
             

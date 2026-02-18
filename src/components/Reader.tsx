@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useReadingStore } from '../stores/useReadingStore';
 import { useReaderStore } from '../stores/useReaderStore'; // New V2 Store
 import { useAnalyticsStore } from '../stores/useAnalyticsStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
 import { usePreloader } from '../hooks/usePreloader';
 
 import { VerticalReader } from './readers/VerticalReader';
@@ -12,12 +13,15 @@ import { SlideshowReader } from './readers/SlideshowReader';
 import { ReaderTopBar } from './reader/ReaderTopBar';
 import { ReaderBottomBar } from './reader/ReaderBottomBar';
 import { QuickSettings } from './reader/QuickSettings';
+import { useReaderEngine } from '../hooks/useReaderEngine';
 
 export const Reader = () => {
+  useReaderEngine();
   usePreloader(5); 
   const { startSession, addReadingTime } = useAnalyticsStore();
   const { images, currentPageIndex: currentIndex, reset, seriesId } = useReadingStore(); 
   const { mode, setCurrentPage, setTotalPages } = useReaderStore();
+  const { setAmbientImage } = useSettingsStore();
   
   // UI Visibility State
   const [showControls, setShowControls] = useState(true);
@@ -30,6 +34,30 @@ export const Reader = () => {
         setCurrentPage(currentIndex);
     }
   }, [images.length, currentIndex]);
+
+  // Sync Global Ambient Image
+  useEffect(() => {
+      const currentImg = images[currentIndex];
+      if (currentImg) {
+          setAmbientImage(currentImg);
+      }
+      return () => {
+          // Verify if we are unmounting or just changing page?
+          // Actually, we want to clear ONLY on unmount of the Reader component.
+          // But this effect runs on index change.
+          // So we should have a separate effect for cleanup?
+          // Or just let the next view set it.
+          // But if we go back to Home (which sets its own), it's fine.
+          // If we go to a view that DOESN'T set it (like Library grid), we might want to clear it.
+          // Let's rely on a separate mount/unmount effect.
+      };
+  }, [currentIndex, images]);
+
+  useEffect(() => {
+      return () => {
+          setAmbientImage(null); // Clear on reader exit
+      };
+  }, []);
 
   const handleMouseMove = (e: MouseEvent) => {
       setShowControls(true);
@@ -63,7 +91,7 @@ export const Reader = () => {
   useEffect(() => {
       const readerPage = useReaderStore.getState().currentPage;
       if (readerPage !== currentIndex) {
-          useReadingStore.getState().setCurrentIndex(readerPage);
+          useReadingStore.getState().setPageIndex(readerPage);
       }
   }, [useReaderStore.getState().currentPage]);
 
@@ -78,7 +106,8 @@ export const Reader = () => {
   };
 
   return (
-      <div className="fixed inset-0 z-50 w-screen h-screen bg-black overflow-hidden select-none flex flex-col items-center justify-center">
+      <div className="fixed inset-0 z-50 w-screen h-screen bg-transparent overflow-hidden select-none flex flex-col items-center justify-center">
+          
           <ReaderTopBar visible={showControls} onBack={reset} />
           
           <QuickSettings />
@@ -101,6 +130,7 @@ export const Reader = () => {
           </div>
           
           <ChapterTransitionOverlay />
+          <FeedbackHUD />
 
           <ReaderBottomBar visible={showControls} />
       </div>
@@ -127,7 +157,7 @@ const ChapterTransitionOverlay = () => {
     }, [currentChapterIndex]);
 
     const title = chapters[currentChapterIndex]?.title;
-    if (!title || !visible) return null;
+    if (!title) return null;
 
     return (
         <AnimatePresence>
@@ -146,3 +176,25 @@ const ChapterTransitionOverlay = () => {
         </AnimatePresence>
     );
 };
+
+const FeedbackHUD = () => {
+    const { feedback } = useReaderStore();
+    
+    return (
+        <AnimatePresence>
+            {feedback && (
+                <motion.div
+                    key={feedback.type + feedback.value}
+                    initial={{ opacity: 0, scale: 0.8, y: 50, x: '-50%' }}
+                    animate={{ opacity: 1, scale: 1, y: 0, x: '-50%' }}
+                    exit={{ opacity: 0, scale: 0.8, y: -20, x: '-50%' }}
+                    className="fixed bottom-32 left-1/2 z-[100] px-8 py-4 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[32px] flex flex-col items-center gap-0 shadow-2xl pointer-events-none select-none min-w-[160px]"
+                >
+                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-1">{feedback.type}</span>
+                    <span className="text-3xl font-black text-white italic tracking-tighter">{feedback.value}</span>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+};
+

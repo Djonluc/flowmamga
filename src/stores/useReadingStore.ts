@@ -1,19 +1,26 @@
 import { create } from 'zustand';
 
+interface ChapterRange {
+    number: string;
+    startIndex: number;
+    endIndex: number;
+}
+
 interface ReadingState {
-  // Core State (Requested Model)
+  // Core State
   currentChapterIndex: number;
   currentPageIndex: number;
-  chapters: { id: string, path: string, title: string }[];
+  chapters: { id: string, path: string, title: string, sequence?: ChapterRange }[];
   currentChapterPages: string[];
   
-  // Compatibility
-  images: string[]; // Kept for un-migrated components, synced with currentChapterPages
+  // Flat Mode Metadata
+  isFlatMode: boolean;
+  metadata: any | null;
   
+  images: string[]; 
   isLoading: boolean;
-  seriesId: string | null; // For DB Sequence
-  currentFolderPath: string | null; // Legacy support
-  currentChapterId: string | null; // Legacy support
+  seriesId: string | null;
+  currentFolderPath: string | null;
 
   // Actions
   openFolder: (path: string, seriesId?: string, chapterId?: string, sequence?: { id: string, path: string, title: string }[]) => Promise<void>;
@@ -25,9 +32,6 @@ interface ReadingState {
   setPageIndex: (index: number) => void;
   nextPage: () => void;
   prevPage: () => void;
-  
-  // Legacy Aliases
-  setCurrentIndex: (index: number) => void;
   
   reset: () => void;
 }
@@ -41,7 +45,8 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
   isLoading: false,
   seriesId: null,
   currentFolderPath: null,
-  currentChapterId: null,
+  isFlatMode: false,
+  metadata: null,
 
   openFolder: async (path, seriesId, chapterId, sequence) => {
     set({ 
@@ -52,22 +57,63 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
       images: [],
       currentPageIndex: 0,
       currentFolderPath: path,
-      currentChapterId: chapterId || null
+      isFlatMode: false,
+      metadata: null
     });
 
-    // Determine Start Index
-    let startIndex = 0;
-    if (sequence && chapterId) {
-        startIndex = sequence.findIndex(c => c.id === chapterId);
-        if (startIndex === -1) startIndex = 0;
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    let isFlat = false;
+    let metadataV3: any = null;
+
+    // 1. Detect Flat Standard V3
+    try {
+        const metaContent = await invoke<string>('read_file_string', { path: `${path}/metadata.json` });
+        const meta = JSON.parse(metaContent);
+        if (meta.version >= 3.0 && meta.chapters) {
+            isFlat = true;
+            metadataV3 = meta;
+        }
+    } catch (e) {
+        // Not V3 or metadata missing
     }
-    
-    set({ currentChapterIndex: startIndex });
-    await get().loadChapter(startIndex);
+
+    set({ isFlatMode: isFlat, metadata: metadataV3 });
+
+    if (isFlat) {
+        // Flat Mode: Load ALL pages once
+        const allPages: string[] = await invoke('read_folder', { path });
+        set({ 
+            images: allPages,
+            currentChapterPages: allPages, // In flat mode, images == currentChapterPages
+            isLoading: false
+        });
+
+        // Determine Start Index from chapterId
+        let startPage = 0;
+        if (chapterId && metadataV3.chapters) {
+            const ch = metadataV3.chapters.find((c: any) => c.number === chapterId || `${seriesId}-${c.number}` === chapterId);
+            if (ch) startPage = ch.startIndex;
+        }
+        
+        get().setPageIndex(startPage);
+
+    } else {
+        // Legacy Nested Mode
+        let startIndex = 0;
+        if (sequence && chapterId) {
+            startIndex = sequence.findIndex(c => c.id === chapterId);
+            if (startIndex === -1) startIndex = 0;
+        }
+        set({ currentChapterIndex: startIndex });
+        await get().loadChapter(startIndex);
+    }
   },
 
   loadChapter: async (index: number) => {
       const state = get();
+      if (state.isFlatMode) return; // No-op in flat mode
+
       const chapter = state.chapters[index];
       if (!chapter) {
           set({ isLoading: false });
@@ -76,87 +122,75 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
 
       const { invoke } = await import('@tauri-apps/api/core');
       try {
-          // Pre-set index to avoid UI flickering old chapter
-          set({ isLoading: true, currentChapterIndex: index, currentChapterId: chapter.id }); 
-          
+          set({ isLoading: true, currentChapterIndex: index }); 
           const pages: string[] = await invoke('read_folder', { path: chapter.path });
           
-          // Restore Progress
-          let startPage = 0;
-          if (state.seriesId) {
-             try {
-                const { getDb } = await import('../services/db');
-                const db = getDb();
-                const progress = await db.select<any[]>(
-                     'SELECT currentPage FROM ReadingProgress WHERE seriesId = ? AND chapterId = ?',
-                     [state.seriesId, chapter.id]
-                );
-                if (progress.length > 0 && progress[0].currentPage >= 0) {
-                    startPage = Math.min(progress[0].currentPage, pages.length - 1);
-                }
-             } catch(e) { /* ignore */ }
-          }
-
           set({ 
               currentChapterPages: pages,
-              images: pages, // Sync
-              currentPageIndex: startPage,
+              images: pages,
+              currentPageIndex: 0,
               isLoading: false 
           });
-
-          // Preload next chapter (Asset Caching)
-          if (index < state.chapters.length - 1) {
-              // const nextChap = state.chapters[index + 1];
-              // invoke('preload_folder', { path: nextChap.path }); 
-          }
-
       } catch (err) {
           console.error('[ReadingStore] Failed to load chapter', err);
           set({ isLoading: false });
       }
   },
 
+  setPageIndex: (index) => {
+      const state = get();
+      const safeIndex = Math.max(0, Math.min(index, state.images.length - 1));
+      set({ currentPageIndex: safeIndex });
+      
+      // Auto-detect chapter in flat mode
+      if (state.isFlatMode && state.metadata?.chapters) {
+          const chIndex = state.metadata.chapters.findIndex((c: any) => 
+            safeIndex >= c.startIndex && safeIndex <= c.endIndex
+          );
+          if (chIndex !== -1 && chIndex !== state.currentChapterIndex) {
+              set({ currentChapterIndex: chIndex });
+          }
+      }
+
+      // Save Progress
+      if (state.seriesId) {
+          const chNumber = state.isFlatMode 
+            ? state.metadata.chapters[get().currentChapterIndex]?.number
+            : state.chapters[state.currentChapterIndex]?.id;
+            
+          if (chNumber) {
+            import('./useLibraryStore').then(m => {
+                m.useLibraryStore.getState().updateReadingProgress(state.seriesId!, chNumber, safeIndex);
+            });
+          }
+      }
+  },
+
   goToNextChapter: async () => {
-      const { currentChapterIndex, chapters } = get();
-      if (currentChapterIndex + 1 < chapters.length) {
+      const { currentChapterIndex, chapters, isFlatMode, metadata, setPageIndex } = get();
+      if (isFlatMode && metadata?.chapters) {
+          const nextCh = metadata.chapters[currentChapterIndex + 1];
+          if (nextCh) setPageIndex(nextCh.startIndex);
+      } else if (currentChapterIndex + 1 < chapters.length) {
           await get().loadChapter(currentChapterIndex + 1);
-      } else {
-          console.log("No next chapter");
       }
   },
 
   goToPrevChapter: async () => {
-      const { currentChapterIndex } = get();
-      if (currentChapterIndex > 0) {
+      const { currentChapterIndex, isFlatMode, metadata, setPageIndex } = get();
+      if (isFlatMode && metadata?.chapters) {
+          const prevCh = metadata.chapters[currentChapterIndex - 1];
+          if (prevCh) setPageIndex(prevCh.startIndex);
+      } else if (currentChapterIndex > 0) {
           await get().loadChapter(currentChapterIndex - 1);
-      }
-  },
-
-  setPageIndex: (index) => {
-      const state = get();
-      set({ currentPageIndex: index });
-      
-      // Save Progress
-      if (state.seriesId) {
-          const chapter = state.chapters[state.currentChapterIndex];
-          if (chapter) {
-              import('./useLibraryStore').then(m => {
-                  m.useLibraryStore.getState().updateReadingProgress(state.seriesId!, chapter.id, index);
-              });
-          }
-      }
-
-      // Preload Trigger
-      if (index >= state.currentChapterPages.length - 5) {
-           // Maybe preload next chapter data logic here
       }
   },
 
   nextPage: () => {
       const state = get();
-      if (state.currentPageIndex < state.currentChapterPages.length - 1) {
+      if (state.currentPageIndex < state.images.length - 1) {
           state.setPageIndex(state.currentPageIndex + 1);
-      } else {
+      } else if (!state.isFlatMode) {
           state.goToNextChapter();
       }
   },
@@ -165,13 +199,10 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
       const state = get();
       if (state.currentPageIndex > 0) {
           state.setPageIndex(state.currentPageIndex - 1);
-      } else {
+      } else if (!state.isFlatMode) {
           state.goToPrevChapter();
       }
   },
-  
-  // Alias
-  setCurrentIndex: (index) => get().setPageIndex(index),
 
   reset: () => set({ 
       chapters: [], 
@@ -182,6 +213,7 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
       currentChapterIndex: 0,
       currentPageIndex: 0,
       currentFolderPath: null,
-      currentChapterId: null
+      isFlatMode: false,
+      metadata: null
   }),
 }));

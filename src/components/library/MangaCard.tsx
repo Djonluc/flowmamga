@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
-import { Play, Edit2, Trash2, FolderOpen } from 'lucide-react';
+import { Play, MoreVertical, FolderOpen } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import clsx from 'clsx';
 
 interface MangaCardProps {
     item: any;
     onClick: () => void;
-    onMenuClick?: (e: React.MouseEvent, action: 'rename' | 'delete' | 'tag') => void;
+    onMenuClick?: (e: React.MouseEvent, action?: 'rename' | 'delete' | 'tag') => void;
     density?: 'compact' | 'comfortable' | 'cinematic';
 }
 
@@ -20,9 +20,9 @@ export const MangaCard = ({ item, onClick, onMenuClick, density = 'comfortable' 
     const badge = isSeries ? `${item.books.length}` : null;
     const tags = item.tags || [];
 
-    const handleAction = (e: React.MouseEvent, action: 'rename' | 'delete' | 'tag') => {
+    const handleMenu = (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (onMenuClick) onMenuClick(e, action);
+        if (onMenuClick) onMenuClick(e);
     };
 
     return (
@@ -66,22 +66,13 @@ export const MangaCard = ({ item, onClick, onMenuClick, density = 'comfortable' 
                         <Play size={24} fill="currentColor" className="ml-1" />
                     </motion.button>
                     
-                    <div className="flex gap-2">
-                         <button 
-                            onClick={(e) => handleAction(e, 'rename')}
-                            className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all hover:scale-110 active:scale-90" 
-                            title="Rename"
-                         >
-                             <Edit2 size={16} />
-                         </button>
-                         <button 
-                            onClick={(e) => handleAction(e, 'delete')}
-                            className="p-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-500 transition-all hover:scale-110 active:scale-90 border border-red-500/20" 
-                            title="Delete"
-                         >
-                             <Trash2 size={16} />
-                         </button>
-                    </div>
+                    <button 
+                        onClick={handleMenu}
+                        className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all hover:scale-110 active:scale-90 backdrop-blur-md" 
+                        title="More Options"
+                    >
+                         <MoreVertical size={20} />
+                    </button>
                 </div>
 
                 {/* Badges */}
@@ -91,6 +82,14 @@ export const MangaCard = ({ item, onClick, onMenuClick, density = 'comfortable' 
                              {badge} VOLS
                          </span>
                      )}
+                     
+                     {/* New Badge */}
+                     {isSeries && item.updatedAt && (new Date().getTime() - new Date(item.updatedAt).getTime() < 3 * 24 * 60 * 60 * 1000) && (
+                         <span className="px-2 py-1 rounded-md bg-blue-500 text-[9px] font-black text-white shadow-lg uppercase tracking-widest animate-pulse">
+                             NEW
+                         </span>
+                     )}
+
                      {!isSeries && item.meta?.chapter && (
                          <span className="px-2 py-1 rounded-md bg-accent text-[9px] font-black text-white shadow-lg uppercase tracking-widest">
                              CH {item.meta.chapter}

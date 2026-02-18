@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 
 export type ReadingMode = 'vertical' | 'single' | 'dual' | 'slideshow' | 'horizontal';
 export type Theme = 'dark' | 'light' | 'oled' | 'paper' | 'cyberpunk';
+export type AmbientMode = 'solid' | 'blurred-page' | 'blurred-cover' | 'gradient' | 'oled';
+export type SidebarMode = 'expanded' | 'collapsed' | 'hover';
 
 interface SettingsState {
   theme: Theme;
@@ -10,6 +12,7 @@ interface SettingsState {
   readingDirection: 'ltr' | 'rtl';
   gapSize: number;
   slideshowInterval: number;
+  slideshowTransition: 'fade' | 'slide' | 'none';
   fitMode: 'width' | 'height' | 'original' | 'smart';
   zoomScale: number; // Global zoom preference
   sidebarOpen: boolean;
@@ -31,9 +34,12 @@ interface SettingsState {
   setReadingDirection: (dir: 'ltr' | 'rtl') => void;
   setGapSize: (size: number) => void;
   setSlideshowInterval: (ms: number) => void;
+  setSlideshowTransition: (type: 'fade' | 'slide' | 'none') => void;
   setFitMode: (mode: 'width' | 'height' | 'original' | 'smart') => void;
   setZoomScale: (scale: number) => void;
   toggleSidebar: () => void;
+  sidebarMode: SidebarMode;
+  setSidebarMode: (mode: SidebarMode) => void;
   
   ambientVolume: number; // 0 to 1
   setAmbientVolume: (volume: number) => void;
@@ -47,6 +53,8 @@ interface SettingsState {
 
   isSettingsOpen: boolean;
   toggleSettings: () => void;
+  isDownloadPanelOpen: boolean;
+  toggleDownloadPanel: () => void;
 
   // Image Processing
   brightness: number;
@@ -69,9 +77,36 @@ interface SettingsState {
   setAccentColor: (color: string) => void;
   setInitializing: (init: boolean) => void;
   setSelectedAmbientSound: (sound: string) => void;
+
+  // Ambient Background
+  ambientMode: AmbientMode;
+  ambientIntensity: number; // Opacity of the effect (0-1)
+  ambientBlur: number; // Blur radius in px
+  ambientBrightness: number; // 0-2 (1 is neutral)
+  showAmbientNoise: boolean;
+  
+  setAmbientMode: (mode: AmbientMode) => void;
+  setAmbientIntensity: (val: number) => void;
+  setAmbientBlur: (val: number) => void;
+  setAmbientBrightness: (val: number) => void;
+  setAmbientNoise: (show: boolean) => void;
+  
+  ambientImage: string | null;
+  setAmbientImage: (img: string | null) => void;
   
   libraryPath: string | null;
+  downloadPath: string | null;
+  firstRunComplete: boolean;
+  isLocationModalOpen: boolean;
+  isSafetyCheckModalOpen: boolean;
+  safetyCheckTitle: string;
+  onSafetyCheckResolved: ((action: 'update' | 'redownload') => void) | undefined;
   setLibraryPath: (path: string) => void;
+  setDownloadPath: (path: string) => void;
+  setFirstRunComplete: (done: boolean) => void;
+  getRecommendedPath: () => Promise<string>;
+  setLocationModalOpen: (open: boolean) => void;
+  setSafetyCheckModal: (open: boolean, title?: string, callback?: (action: 'update' | 'redownload') => void) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -82,6 +117,7 @@ export const useSettingsStore = create<SettingsState>()(
       readingDirection: 'ltr',
       gapSize: 20,
       slideshowInterval: 3000,
+      slideshowTransition: 'fade',
       fitMode: 'width',
       zoomScale: 1,
       activeView: 'home',
@@ -110,12 +146,15 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       sidebarOpen: true,
+      sidebarMode: 'expanded',
+      setSidebarMode: (mode) => set({ sidebarMode: mode }),
 
       setTheme: (theme) => set({ theme }),
       setReadingMode: (mode) => set({ readingMode: mode }),
       setReadingDirection: (dir) => set({ readingDirection: dir }),
       setGapSize: (size) => set({ gapSize: size }),
       setSlideshowInterval: (ms) => set({ slideshowInterval: ms }),
+      setSlideshowTransition: (type) => set({ slideshowTransition: type }),
       setFitMode: (mode) => set({ fitMode: mode }),
       setZoomScale: (scale) => set({ zoomScale: scale }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -132,6 +171,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       isSettingsOpen: false,
       toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
+      isDownloadPanelOpen: false,
+      toggleDownloadPanel: () => set((state) => ({ isDownloadPanelOpen: !state.isDownloadPanelOpen })),
 
       // Image Processing
       brightness: 1,
@@ -155,9 +196,45 @@ export const useSettingsStore = create<SettingsState>()(
       selectedAmbientSound: 'none',
       setSelectedAmbientSound: (sound) => set({ selectedAmbientSound: sound }),
 
+      // Ambient Defaults
+      ambientMode: 'blurred-page',
+      ambientIntensity: 0.5,
+      ambientBlur: 60,
+      ambientBrightness: 0.4,
+      showAmbientNoise: true,
+      
+      setAmbientMode: (mode) => set({ ambientMode: mode }),
+      setAmbientIntensity: (val) => set({ ambientIntensity: val }),
+      setAmbientBlur: (val) => set({ ambientBlur: val }),
+      setAmbientBrightness: (val) => set({ ambientBrightness: val }),
+      setAmbientNoise: (show) => set({ showAmbientNoise: show }),
+      
+      // Dynamic Ambient Source
+      ambientImage: null,
+      setAmbientImage: (img) => set({ ambientImage: img }),
+
       // Library Persistence
       libraryPath: null,
+      downloadPath: null,
+      firstRunComplete: false,
       setLibraryPath: (path) => set({ libraryPath: path }),
+      setDownloadPath: (path) => set({ downloadPath: path }),
+      setFirstRunComplete: (done) => set({ firstRunComplete: done }),
+      getRecommendedPath: async () => {
+          const { documentDir, join } = await import('@tauri-apps/api/path');
+          const docs = await documentDir();
+          return await join(docs, 'FlowManga');
+      },
+      isLocationModalOpen: false,
+      setLocationModalOpen: (open) => set({ isLocationModalOpen: open }),
+      isSafetyCheckModalOpen: false,
+      safetyCheckTitle: '',
+      onSafetyCheckResolved: undefined,
+      setSafetyCheckModal: (open, title = '', callback = undefined) => set({ 
+          isSafetyCheckModalOpen: open, 
+          safetyCheckTitle: title,
+          onSafetyCheckResolved: callback
+      }),
     }),
     {
       name: 'flowmanga-settings',

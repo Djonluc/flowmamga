@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useReadingStore } from '../../stores/useReadingStore';
 import { useReaderStore } from '../../stores/useReaderStore';
+import { useSettingsStore } from '../../stores/useSettingsStore'; // Added
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { SmartImage } from '../SmartImage';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,13 +10,15 @@ export const SlideshowReader = () => {
     const { images } = useReadingStore();
     const { 
         slideshowActive, 
-        slideshowDelay, 
         currentPage, 
         setCurrentPage, 
         setSlideshowActive,
         totalPages 
     } = useReaderStore();
     
+    // Use Global Settings
+    const { slideshowInterval, slideshowTransition } = useSettingsStore();
+
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // SLIDESHOW ENGINE
@@ -23,26 +26,27 @@ export const SlideshowReader = () => {
         if (!slideshowActive) return;
 
         intervalRef.current = setInterval(() => {
-            setCurrentPage(useReaderStore.getState().currentPage + 1);
-        }, slideshowDelay);
+            const next = useReaderStore.getState().currentPage + 1;
+            setCurrentPage(next);
+            // Critical: Sync Global Store for Ambient System
+            useReadingStore.getState().setPageIndex(next);
+        }, slideshowInterval); 
 
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [slideshowActive, slideshowDelay]);
+    }, [slideshowActive, slideshowInterval]);
 
-    // End of Chapter Check
     // End of Chapter Check
     useEffect(() => {
         if (currentPage >= totalPages && totalPages > 0) {
             const store = useReadingStore.getState();
             if (store.currentChapterIndex + 1 < store.chapters.length) {
-                // Transition to Next Chapter
                 store.goToNextChapter();
             } else {
-                // End of Series
                 setSlideshowActive(false);
                 setCurrentPage(totalPages - 1);
+                useReadingStore.getState().setPageIndex(totalPages - 1);
             }
         }
     }, [currentPage, totalPages, setSlideshowActive, setCurrentPage]);
@@ -50,15 +54,21 @@ export const SlideshowReader = () => {
     const currentImage = images[currentPage];
     if (!currentImage) return null;
 
+    // Transition Config
+    const transitions: Record<string, any> = {
+        fade: { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.8 } },
+        slide: { initial: { x: '100%' }, animate: { x: 0 }, exit: { x: '-100%' }, transition: { duration: 0.5, ease: "easeInOut" } },
+        none: { initial: { opacity: 1 }, animate: { opacity: 1 }, exit: { opacity: 1 }, transition: { duration: 0 } },
+    };
+    
+    const activeTransition = transitions[slideshowTransition] || transitions.fade;
+
     return (
-        <div className="slideshow-reader w-full h-full flex items-center justify-center bg-black overflow-hidden relative">
+        <div className="slideshow-reader w-full h-full flex items-center justify-center bg-transparent overflow-hidden relative">
             <AnimatePresence mode="wait">
                 <motion.div
                    key={currentImage}
-                   initial={{ opacity: 0 }}
-                   animate={{ opacity: 1 }}
-                   exit={{ opacity: 0 }}
-                   transition={{ duration: 0.8 }}
+                   {...activeTransition}
                    className="w-full h-full flex items-center justify-center px-4"
                 >
                     <SmartImage
@@ -73,7 +83,7 @@ export const SlideshowReader = () => {
             <div className="absolute bottom-10 left-10 flex items-center gap-3 bg-black/40 backdrop-blur-xl border border-white/5 px-4 py-2 rounded-full">
                 <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">
-                    Streaming Slide <span className="text-white/20">•</span> {(slideshowDelay / 1000).toFixed(1)}s
+                    Streaming Slide <span className="text-white/20">•</span> {(slideshowInterval / 1000).toFixed(1)}s
                 </span>
             </div>
         </div>

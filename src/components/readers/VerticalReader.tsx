@@ -7,8 +7,10 @@ import { motion } from 'framer-motion';
 
 export const VerticalReader = () => {
   const { images } = useReadingStore();
-  const { autoScroll, scrollSpeed, setAutoScroll } = useReaderStore();
+  const { autoScroll, scrollSpeed, setAutoScroll, isBoosted } = useReaderStore();
   const readerRef = useRef<HTMLDivElement>(null);
+  
+  const actualSpeed = isBoosted ? scrollSpeed * 4 : scrollSpeed;
   
   // V2 AUTO-SCROLL ENGINE
   useEffect(() => {
@@ -21,7 +23,7 @@ export const VerticalReader = () => {
         const delta = time - lastTime;
         lastTime = time;
 
-        const pixels = (scrollSpeed / 1000) * delta;
+        const pixels = (actualSpeed / 1000) * delta;
         const container = readerRef.current!;
         const maxScroll = container.scrollHeight - container.clientHeight;
 
@@ -65,10 +67,33 @@ export const VerticalReader = () => {
       }
   }, [images]);
 
+  // V2: Intersection Observer for current page tracking
+  useEffect(() => {
+      const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+              if (entry.isIntersecting) {
+                  const idx = Number(entry.target.getAttribute('data-index'));
+                  if (!isNaN(idx)) {
+                      // Update global reading store directly
+                      useReadingStore.getState().setPageIndex(idx);
+                  }
+              }
+          });
+      }, { 
+          root: readerRef.current,
+          threshold: 0.6 // 60% visibility triggers change
+      });
+
+      const pages = document.querySelectorAll('.manga-page');
+      pages.forEach(p => observer.observe(p));
+
+      return () => observer.disconnect();
+  }, [images]); // Re-run when images change
+
   return (
     <div 
         ref={readerRef} 
-        className="reader-scroll w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center bg-black select-none no-scrollbar"
+        className="reader-scroll w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center bg-transparent select-none no-scrollbar"
         style={{ scrollBehavior: 'auto' }} 
     >
       {images.map((imagePath, index) => {
@@ -78,10 +103,11 @@ export const VerticalReader = () => {
         return (
           <React.Fragment key={imagePath}>
             <motion.div
+                data-index={index}
+                className="manga-page w-full flex justify-center py-2"
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true, margin: "200px" }}
-                className="w-full flex justify-center py-2"
             >
                 <SmartImage
                     src={imagePath.startsWith('http') ? imagePath : convertFileSrc(imagePath)}

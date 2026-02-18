@@ -15,6 +15,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { HomeView } from './components/HomeView';
 import { VideoLibrary } from './components/video/VideoLibrary';
 import { HistoryView } from './components/HistoryView';
+import { AmbientBackground } from './components/AmbientBackground';
+import { AmbientSoundPlayer } from './components/AmbientSoundPlayer';
+import { AmbientControlPanel } from './components/AmbientControlPanel';
+import { useVideoStore } from './stores/useVideoStore';
+import { LocationModal } from './components/modals/LocationModal';
+import { SafetyCheckModal } from './components/modals/SafetyCheckModal';
 
 function App() {
   const { isInitializing } = useSettingsStore();
@@ -55,16 +61,24 @@ function App() {
     );
   }
 
-  return <MainContent />;
+  return (
+    <>
+        <AmbientBackground />
+        <AmbientSoundPlayer />
+        <AmbientControlPanel />
+        <MainContent />
+    </>
+  );
 }
-
-import { useVideoStore } from './stores/useVideoStore';
-
 
 function MainContent() {
   const { images } = useReadingStore()
   const { currentVideo } = useVideoStore();
-  const { activeView } = useSettingsStore();
+  const { 
+    activeView, 
+    isLocationModalOpen, setLocationModalOpen,
+    isSafetyCheckModalOpen, safetyCheckTitle, onSafetyCheckResolved, setSafetyCheckModal
+  } = useSettingsStore();
 
   useLibraryEvents();
   useAdaptiveColor();
@@ -107,11 +121,23 @@ function MainContent() {
             )}
         </AnimatePresence>
         <ControlPanel />
-        <DownloadIndicator />
+        <LocationModal 
+            isOpen={isLocationModalOpen} 
+            onClose={() => setLocationModalOpen(false)}
+            onSuccess={(path) => console.log('Download path set to:', path)}
+        />
+        <SafetyCheckModal 
+            isOpen={isSafetyCheckModalOpen}
+            mangaTitle={safetyCheckTitle}
+            onClose={() => setSafetyCheckModal(false)}
+            onAction={(action) => {
+                onSafetyCheckResolved?.(action);
+                setSafetyCheckModal(false);
+            }}
+        />
     </Layout>
   )
 }
 
-import { DownloadIndicator } from './components/DownloadIndicator';
 
 export default App

@@ -1,21 +1,24 @@
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useReadingStore } from '../stores/useReadingStore';
-import { Home, Library, FolderOpen, Activity, Settings, Zap, Film, Clock } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Home, Library, FolderOpen, Activity, Settings, Zap, Film, Clock, Lock, SidebarClose, MousePointer2, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
+import { open as openShell } from '@tauri-apps/plugin-shell';
 import clsx from 'clsx';
+import type { SidebarMode } from '../stores/useSettingsStore';
 
 export const Sidebar = () => {
     const { 
-        sidebarOpen, toggleSidebar, activeView, setActiveView,
+        sidebarMode, setSidebarMode, activeView, setActiveView,
         isSettingsOpen, toggleSettings
     } = useSettingsStore();
 
     const [isHovered, setIsHovered] = useState(false);
-    // Intelligent open state: Open if locked open OR hovered
-    const isOpen = sidebarOpen || isHovered;
+    
+    // Logic: Expanded Mode OR (Hover Mode AND Hovered)
+    const isExpanded = sidebarMode === 'expanded' || (sidebarMode === 'hover' && isHovered);
 
     const navItems = [
         { icon: <Home size={20} />, label: 'Home', view: 'home' as const },
@@ -24,6 +27,29 @@ export const Sidebar = () => {
         { icon: <Clock size={20} />, label: 'History', view: 'history' as const },
         { icon: <Activity size={20} />, label: 'Analytics', view: 'analytics' as const },
     ];
+
+    const cycleMode = () => {
+        const modes: SidebarMode[] = ['expanded', 'hover', 'collapsed'];
+        const currentIdx = modes.indexOf(sidebarMode);
+        const nextIdx = (currentIdx + 1) % modes.length;
+        setSidebarMode(modes[nextIdx]);
+    };
+
+    const getModeIcon = () => {
+        switch (sidebarMode) {
+            case 'expanded': return <Lock size={16} />;
+            case 'hover': return <MousePointer2 size={16} />;
+            case 'collapsed': return <SidebarClose size={16} />;
+        }
+    };
+
+    const getModeLabel = () => {
+        switch (sidebarMode) {
+            case 'expanded': return "Always Expanded";
+            case 'hover': return "Expand on Hover";
+            case 'collapsed': return "Always Collapsed";
+        }
+    };
 
     const handleQuickOpen = async () => {
         try {
@@ -44,54 +70,51 @@ export const Sidebar = () => {
     };
 
     return (
-        <>
-            {/* Desktop Intelligent Sidebar */}
-            <motion.div 
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                initial={false}
-                animate={{ 
-                    width: isOpen ? 240 : 70,
-                }}
-                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className={clsx(
-                    "hidden md:flex flex-col h-full z-40 relative group",
-                    "border-r border-border-subtle bg-background/95 backdrop-blur-3xl"
-                )}
-            >
-                {/* Logo / Header */}
-                <div className="h-16 flex items-center px-4 mb-2 overflow-hidden flex-shrink-0">
-                   <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 flex-shrink-0 relative z-10">
-                            <Zap size={20} fill="currentColor" className="text-white" />
-                       </div>
-                       
-                       <motion.div 
-                           animate={{ opacity: isOpen ? 1 : 0, x: isOpen ? 0 : -20 }}
-                           className="flex flex-col whitespace-nowrap"
-                       >
-                           <span className="font-bold text-base tracking-tight text-white leading-none">
-                                FLOW<span className="text-indigo-400">MANGA</span>
-                           </span>
-                           <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-medium leading-none mt-1">
-                                Media Engine
-                           </span>
-                       </motion.div>
+        <motion.div 
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            initial={false}
+            animate={{ 
+                width: isExpanded ? 240 : 72, 
+            }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className={clsx(
+                "hidden md:flex flex-col h-full z-40 relative group flex-shrink-0",
+                "border-r border-white/5 bg-background/95 backdrop-blur-3xl"
+            )}
+        >
+            {/* Logo / Header */}
+            <div className="h-16 flex items-center px-4 mb-2 overflow-hidden flex-shrink-0">
+               <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 flex-shrink-0 relative z-10">
+                        <Zap size={20} fill="currentColor" className="text-white" />
                    </div>
-                </div>
+                   
+                   <motion.div 
+                       animate={{ opacity: isExpanded ? 1 : 0, x: isExpanded ? 0 : -20 }}
+                       className="flex flex-col whitespace-nowrap overflow-hidden"
+                   >
+                       <span className="font-bold text-base tracking-tight text-white leading-none">
+                            FLOW<span className="text-indigo-400">MANGA</span>
+                       </span>
+                       <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-medium leading-none mt-1">
+                            Media Engine
+                       </span>
+                   </motion.div>
+               </div>
+            </div>
 
-                {/* Navigation Items */}
-                <div className="flex-1 flex flex-col gap-1 px-3">
-                    <div className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider px-3 py-2 opacity-0 transition-opacity duration-300" style={{ opacity: isOpen ? 1 : 0 }}>
-                        Menu
-                    </div>
-
-                    {navItems.map((item) => (
+            {/* Navigation Items */}
+            <div className="flex-1 flex flex-col gap-1 px-3 overflow-y-auto no-scrollbar">
+                
+                {/* Main Nav */}
+                <div className="space-y-1">
+                     {navItems.map((item) => (
                         <NavButton 
                             key={item.view}
                             icon={item.icon} 
                             label={item.label} 
-                            expanded={isOpen}
+                            expanded={isExpanded}
                             active={activeView === item.view} 
                             onClick={() => {
                                 useReadingStore.getState().reset();
@@ -100,66 +123,88 @@ export const Sidebar = () => {
                         />
                     ))}
 
-                    <div className="my-2 h-[1px] bg-white/5 mx-2" />
-
                     <NavButton 
                         icon={<FolderOpen size={20} />} 
                         label="Quick Open" 
-                        expanded={isOpen}
+                        expanded={isExpanded}
                         onClick={handleQuickOpen}
                     />
                 </div>
 
-                {/* Bottom Actions */}
-                <div className="p-3 mt-auto">
-                    <NavButton 
-                        icon={<Settings size={20} />} 
-                        label="Settings" 
-                        expanded={isOpen}
-                        active={isSettingsOpen}
-                        onClick={toggleSettings}
-                    />
+                <div className="my-4 h-px bg-white/5 mx-2" />
+                
+                {/* Sources Section */}
+                <div className="space-y-1">
+                    <div className={clsx(
+                        "text-[10px] font-bold text-neutral-500 uppercase tracking-wider px-3 py-2 transition-opacity duration-300",
+                         isExpanded ? "opacity-100" : "opacity-0 hidden"
+                    )}>
+                        Sources
+                    </div>
                     
-                    {/* Toggle Lock - Only visible when hovered/expanded to allow locking open */}
-                    <AnimatePresence>
-                        {isOpen && (
-                            <motion.button
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={toggleSidebar}
-                                className={clsx(
-                                    "mt-2 w-full flex items-center justify-center py-2 rounded-lg text-xs font-medium transition-colors",
-                                    sidebarOpen 
-                                        ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" 
-                                        : "text-neutral-500 hover:text-neutral-300 hover:bg-white/5"
-                                )}
-                            >
-                                {sidebarOpen ? "Sidebar Locked" : "Auto-Collapse"}
-                            </motion.button>
-                        )}
-                    </AnimatePresence>
+                    <div className={clsx("space-y-1", !isExpanded && "flex flex-col items-center")}>
+                         <SourceItem name="MangaDex" color="bg-orange-500" expanded={isExpanded} />
+                         <SourceItem name="NamiComi" color="bg-yellow-500" expanded={isExpanded} />
+                         <SourceItem name="Coming Soon" color="bg-neutral-700" expanded={isExpanded} disabled />
+                    </div>
+
+                     <NavButton 
+                        icon={<ExternalLink size={18} />} 
+                        label="Request Source" 
+                        expanded={isExpanded}
+                        onClick={() => openShell('https://github.com/djonluc/flowmamga/issues')}
+                        className="mt-2 text-neutral-500 hover:text-white"
+                    />
                 </div>
-            </motion.div>
-        </>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="p-3 mt-auto bg-black/20 backdrop-blur-md">
+                <NavButton 
+                    icon={<Settings size={20} />} 
+                    label="Settings" 
+                    expanded={isExpanded}
+                    active={isSettingsOpen}
+                    onClick={toggleSettings}
+                />
+                
+                <button
+                    onClick={cycleMode}
+                    className={clsx(
+                        "mt-2 w-full flex items-center rounded-lg text-xs font-medium transition-colors border border-transparent h-10",
+                        isExpanded ? "justify-between px-3 bg-white/5 hover:bg-white/10 hover:border-white/5" : "justify-center text-neutral-500 hover:text-white"
+                    )}
+                    title={getModeLabel()}
+                >
+                    <div className="flex items-center gap-3">
+                         <div className={clsx("text-neutral-400", !isExpanded && "mx-auto")}>
+                            {getModeIcon()}
+                         </div>
+                         {isExpanded && <span className="text-neutral-400">{getModeLabel()}</span>}
+                    </div>
+                </button>
+            </div>
+        </motion.div>
     );
 };
 
-const NavButton = ({ icon, label, active, onClick, expanded }: { icon: React.ReactNode, label: string, active?: boolean, onClick?: () => void, expanded: boolean }) => (
+const NavButton = ({ icon, label, active, onClick, expanded, className }: { icon: React.ReactNode, label: string, active?: boolean, onClick?: () => void, expanded: boolean, className?: string }) => (
     <button 
         onClick={onClick}
         className={clsx(
-            "group relative flex items-center h-11 w-full rounded-lg transition-all duration-200 outline-none",
+            "group relative flex items-center h-10 w-full rounded-lg transition-all duration-200 outline-none flex-shrink-0",
             active 
-              ? 'bg-surface-elevated text-white' 
-              : 'text-neutral-400 hover:text-white hover:bg-white/5'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
+              : 'text-neutral-400 hover:text-white hover:bg-white/5',
+            className
         )}
+        title={!expanded ? label : undefined}
     >
         {/* Active Indicator Strip (Vertical Pill) */}
         {active && (
             <motion.div 
                 layoutId="activeStrip"
-                className="absolute left-0 top-2 bottom-2 w-1 bg-accent rounded-r-full shadow-[0_0_12px_var(--color-accent-glow)]"
+                className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full"
             />
         )}
 
@@ -173,13 +218,35 @@ const NavButton = ({ icon, label, active, onClick, expanded }: { icon: React.Rea
             initial={false}
             animate={{ 
                 opacity: expanded ? 1 : 0, 
-                x: expanded ? 0 : -10,
+                width: expanded ? 'auto' : 0,
                 display: expanded ? 'block' : 'none'
             }}
             transition={{ duration: 0.2 }}
-            className="font-medium text-sm whitespace-nowrap"
+            className="font-medium text-sm whitespace-nowrap overflow-hidden"
         >
             {label}
         </motion.span>
     </button>
+);
+
+const SourceItem = ({ name, color, expanded, disabled }: { name: string, color: string, expanded: boolean, disabled?: boolean }) => (
+    <div className={clsx(
+        "flex items-center h-9 w-full rounded-lg transition-all duration-200 px-3 gap-3",
+        disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-white/5 cursor-pointer",
+        !expanded && "justify-center px-0"
+    )}>
+         <div className={clsx("w-2 h-2 rounded-full", color)} />
+         
+         <motion.div 
+            animate={{ 
+                opacity: expanded ? 1 : 0, 
+                width: expanded ? 'auto' : 0,
+                display: expanded ? 'flex' : 'none'
+            }}
+            className="flex-1 items-center justify-between overflow-hidden whitespace-nowrap"
+         >
+             <span className="text-sm font-medium text-neutral-300">{name}</span>
+             {!disabled && <CheckCircle2 size={12} className="text-green-500" />}
+         </motion.div>
+    </div>
 );

@@ -1,9 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play, ArrowLeft, Clock, Library as LibraryIcon, User, RefreshCw } from 'lucide-react';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { Play, ArrowLeft, Clock, Library as LibraryIcon, User, RefreshCw, Trash2, Image as ImageIcon } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { useLibraryStore, type Book } from '../../stores/useLibraryStore';
 import { useReadingStore } from '../../stores/useReadingStore';
+import { useSettingsStore } from '../../stores/useSettingsStore';
 import { UpdateManager } from '../../services/UpdateManager';
 import { toast } from '../Toast';
 import clsx from 'clsx';
@@ -16,13 +18,23 @@ interface MangaDetailsProps {
 export const MangaDetails: React.FC<MangaDetailsProps> = ({ seriesId, onBack }) => {
   const { series } = useLibraryStore();
   const { openFolder } = useReadingStore();
+  const { setAmbientImage } = useSettingsStore();
+  const [isDraggingCover, setIsDraggingCover] = React.useState(false);
   
   const selectedSeries = series.find(s => s.id === seriesId);
 
-  if (!selectedSeries) return null;
-
   // Derive cover
-  const coverSrc = selectedSeries.cover ? (selectedSeries.cover.startsWith('http') ? selectedSeries.cover : convertFileSrc(selectedSeries.cover)) : '';
+  const coverSrc = selectedSeries?.cover ? (selectedSeries.cover.startsWith('http') ? selectedSeries.cover : convertFileSrc(selectedSeries.cover)) : '';
+
+  // Sync Ambient
+  React.useEffect(() => {
+      if (coverSrc) {
+          setAmbientImage(coverSrc);
+      }
+      return () => setAmbientImage(null);
+  }, [coverSrc, setAmbientImage]);
+
+  if (!selectedSeries) return null;
 
   // Sort chapters numerically
   const sortedChapters = [...selectedSeries.books].sort((a, b) => {
@@ -30,6 +42,36 @@ export const MangaDetails: React.FC<MangaDetailsProps> = ({ seriesId, onBack }) 
     const numB = parseFloat(b.meta.chapter || '0');
     return numA - numB;
   });
+
+  const handleChangeCover = async () => {
+      try {
+        const selected = await openDialog({
+            multiple: false,
+            filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp']}]
+        });
+        
+        if (selected && typeof selected === 'string') {
+            toast.info('Updating cover...');
+            await useLibraryStore.getState().setSeriesCover(seriesId, selected);
+            toast.success('Cover updated');
+        }
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to update cover');
+      }
+  };
+
+  const handleRemoveCover = async () => {
+      if (confirm('Remove this cover image?')) {
+          try {
+              await useLibraryStore.getState().removeSeriesCover(seriesId);
+              toast.success('Cover removed');
+          } catch (e) {
+              console.error(e);
+              toast.error('Failed to remove cover');
+          }
+      }
+  };
 
   const handleReadChapter = async (targetBook: Book) => {
     // Generate the sequence of chapters for seamless reading
@@ -60,13 +102,7 @@ export const MangaDetails: React.FC<MangaDetailsProps> = ({ seriesId, onBack }) 
       exit={{ opacity: 0 }}
       className="h-full flex flex-col bg-[#080808] relative overflow-hidden"
     >
-      {/* Background Ambient Blur */}
-      {coverSrc && (
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none opacity-20">
-          <img src={coverSrc} alt="" className="w-full h-full object-cover blur-[120px] scale-150" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#080808]/90 to-[#080808]" />
-        </div>
-      )}
+      {/* Local Ambient Removed in favor of Global */}
 
       {/* Top Bar Navigation */}
       <div className="z-30 p-8 flex items-center justify-between pointer-events-auto">
@@ -87,7 +123,28 @@ export const MangaDetails: React.FC<MangaDetailsProps> = ({ seriesId, onBack }) 
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="shrink-0 w-full lg:w-96 aspect-[2/3] rounded-[40px] overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.5)] border border-white/10 relative"
+              className={clsx(
+                  "group shrink-0 w-full lg:w-96 aspect-[2/3] rounded-[40px] overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.5)] border border-white/10 relative transition-all",
+                  isDraggingCover && "border-blue-500 shadow-[0_0_50px_rgba(59,130,246,0.3)] scale-105"
+              )}
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingCover(true); }}
+              onDragLeave={() => setIsDraggingCover(false)}
+              onDrop={async (e) => {
+                  e.preventDefault();
+                  setIsDraggingCover(false);
+                  const files = Array.from(e.dataTransfer.files);
+                  if (files.length > 0) {
+                      const file = files[0]; 
+                      const filePath = (file as any).path; 
+                      if (filePath) {
+                          toast.info('Updating cover...');
+                          await useLibraryStore.getState().setSeriesCover(seriesId, filePath);
+                          toast.success('Cover updated');
+                      } else {
+                          toast.info('Please use the Change Cover button to select files.');
+                      }
+                  }
+              }}
             >
               {coverSrc ? (
                 <img src={coverSrc} alt={selectedSeries.displayName} className="w-full h-full object-cover" />
@@ -97,6 +154,36 @@ export const MangaDetails: React.FC<MangaDetailsProps> = ({ seriesId, onBack }) 
                   <span className="text-xs font-black text-neutral-600 uppercase tracking-widest">Missing Cover Art</span>
                 </div>
               )}
+
+              {/* Cover Actions Overlay */}
+              <div className={clsx(
+                  "absolute inset-0 bg-black/60 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-sm pointer-events-none",
+                  isDraggingCover ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-hover:pointer-events-auto"
+              )}>
+                  {isDraggingCover ? (
+                      <div className="flex flex-col items-center gap-2 text-blue-400">
+                          <ImageIcon size={32} className="animate-bounce" />
+                          <span className="font-black uppercase tracking-widest text-xs">Drop to Update</span>
+                      </div>
+                  ) : (
+                    <>
+                        <button 
+                            onClick={handleChangeCover}
+                            className="px-6 py-3 bg-white text-black rounded-full font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-transform flex items-center gap-2 shadow-xl"
+                        >
+                            <ImageIcon size={14} /> Change Cover
+                        </button>
+                        {selectedSeries.cover && (
+                            <button 
+                                onClick={handleRemoveCover}
+                                className="px-6 py-3 bg-red-500/20 text-red-500 rounded-full font-black uppercase text-[10px] tracking-widest hover:bg-red-500/30 transition-colors flex items-center gap-2 border border-red-500/20"
+                            >
+                                <Trash2 size={14} /> Remove
+                            </button>
+                        )}
+                    </>
+                  )}
+              </div>
             </motion.div>
 
             {/* Metadata Section */}
@@ -107,9 +194,16 @@ export const MangaDetails: React.FC<MangaDetailsProps> = ({ seriesId, onBack }) 
                     CHAPTER ARCHIVE
                   </span>
                   {selectedSeries.tags.map(tag => (
-                    <span key={tag} className="px-3 py-1 bg-white/5 border border-white/5 rounded-lg text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">
+                    <button 
+                        key={tag} 
+                        onClick={() => {
+                            useLibraryStore.getState().setFilterGenre(tag);
+                            onBack();
+                        }}
+                        className="px-3 py-1 bg-white/5 border border-white/5 rounded-lg text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em] hover:bg-white/10 hover:text-white transition-colors"
+                    >
                       {tag}
-                    </span>
+                    </button>
                   ))}
                 </div>
 
@@ -153,27 +247,43 @@ export const MangaDetails: React.FC<MangaDetailsProps> = ({ seriesId, onBack }) 
 
               {/* Desktop Actions */}
               <div className="hidden lg:flex items-center gap-4">
-                <button 
-                  onClick={async () => {
-                      toast.info('Checking for updates...');
-                      try {
-                          const count = await UpdateManager.checkForUpdates(selectedSeries.id);
-                          if (count > 0) {
-                              toast.success(`Found ${count} new chapters!`);
-                          } else if (count === 0) {
-                              toast.info('Series is up to date');
-                          } else {
-                              toast.error('Update check failed');
-                          }
-                      } catch (e) {
-                          toast.error('Error checking updates');
-                      }
-                  }}
-                  className="px-8 py-5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-[24px] font-black uppercase tracking-[0.2em] text-xs transition-all active:scale-95 flex items-center gap-3"
-                >
-                  <RefreshCw size={18} />
-                  <span>Update</span>
-                </button>
+                <div className="flex items-center gap-2 bg-white/5 rounded-[24px] p-1 border border-white/10">
+                    <select 
+                        className="bg-transparent text-white text-[10px] font-black uppercase tracking-widest px-3 py-2 outline-none cursor-pointer [&>option]:bg-neutral-900"
+                        onChange={(e) => {
+                             (window as any).__updateLimit = Number(e.target.value);
+                        }}
+                        defaultValue="5"
+                    >
+                        <option value="1">Next 1</option>
+                        <option value="5">Next 5</option>
+                        <option value="10">Next 10</option>
+                        <option value="0">All</option>
+                    </select>
+
+                    <button 
+                    onClick={async () => {
+                        const limit = (window as any).__updateLimit !== undefined ? (window as any).__updateLimit : 5;
+                        toast.info(`Checking for updates (Limit: ${limit === 0 ? 'All' : limit})...`);
+                        try {
+                            const count = await UpdateManager.checkForUpdates(selectedSeries.id, limit);
+                            if (count > 0) {
+                                toast.success(`Queued ${count} new chapters!`);
+                            } else if (count === 0) {
+                                toast.info('Series is up to date');
+                            } else {
+                                toast.error('Update check failed');
+                            }
+                        } catch (e) {
+                            toast.error('Error checking updates');
+                        }
+                    }}
+                    className="px-6 py-4 bg-white/10 hover:bg-white/20 text-white rounded-[20px] font-black uppercase tracking-[0.2em] text-xs transition-all active:scale-95 flex items-center gap-3"
+                    >
+                    <RefreshCw size={18} />
+                    <span>Update</span>
+                    </button>
+                </div>
                  <button 
                   onClick={handleContinueReading}
                   className="px-10 py-5 bg-white text-black rounded-[24px] font-black uppercase tracking-[0.2em] text-sm hover:bg-neutral-200 transition-all flex items-center gap-4 shadow-[0_20px_40px_rgba(255,255,255,0.05)] active:scale-95"

@@ -24,7 +24,7 @@ export const SinglePageReader = () => {
   if (!currentImage) return null;
 
   return (
-    <div className="single-page w-full h-full flex items-center justify-center bg-black overflow-hidden relative">
+    <div className="single-page w-full h-full flex items-center justify-center bg-transparent overflow-hidden relative">
       <AnimatePresence mode="wait">
         <motion.div
            key={currentImage}

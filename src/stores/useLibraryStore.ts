@@ -31,6 +31,7 @@ export interface Series {
   cover: string | null;
   description?: string;
   tags: string[];
+  source?: string;
   books: Book[];
   createdAt: string;
   updatedAt: string;
@@ -41,6 +42,19 @@ interface LibraryState {
   recentBooks: any[];
   isLoading: boolean;
   
+  // Library State
+  searchQuery: string;
+  filterGenre: string | null;
+  filterStatus: string | null;
+  filterSource: string | null;
+  selectedSeriesId: string | null;
+
+  setSearchQuery: (query: string) => void;
+  setFilterGenre: (genre: string | null) => void;
+  setFilterStatus: (status: string | null) => void;
+  setFilterSource: (source: string | null) => void;
+  setSelectedSeriesId: (id: string | null) => void;
+  
   // Actions
   loadFromDb: () => Promise<void>;
   setLoading: (loading: boolean) => void;
@@ -50,6 +64,8 @@ interface LibraryState {
   updateTags: (seriesId: string, tags: string[]) => Promise<void>;
   renameSeries: (seriesId: string, newTitle: string) => Promise<void>;
   deleteSeries: (seriesId: string) => Promise<void>;
+  setSeriesCover: (seriesId: string, sourcePath: string) => Promise<void>;
+  removeSeriesCover: (seriesId: string) => Promise<void>;
   registerDownloadedSeries: (metadata: any, chapters: any[]) => Promise<void>;
   scanLibrary: (path?: string) => Promise<void>;
 }
@@ -58,6 +74,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   series: [],
   recentBooks: [],
   isLoading: false,
+
+  searchQuery: '',
+  filterGenre: null,
+  filterStatus: null,
+  filterSource: null,
+
+  setSearchQuery: (q) => set({ searchQuery: q }),
+  setFilterGenre: (g) => set({ filterGenre: g }),
+  setFilterStatus: (s) => set({ filterStatus: s }),
+  setFilterSource: (src) => set({ filterSource: src }),
 
   loadFromDb: async () => {
     const db = getDb();
@@ -81,6 +107,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         cover: s.coverPath,
         description: s.description,
         tags: s.tags ? s.tags.split(',').filter((t: string) => t) : [],
+        source: s.source,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
         books: chapters.map(c => ({
@@ -173,6 +200,54 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       await get().loadFromDb();
   },
 
+  setSeriesCover: async (seriesId, sourcePath) => {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const db = getDb();
+      const series = get().series.find(s => s.id === seriesId);
+      if (!series) return;
+
+      try {
+          const newCoverPath = await invoke<string>('set_manga_cover', { seriesPath: series.path, sourcePath });
+          
+          // Update DB
+          await db.execute('UPDATE Series SET coverPath = ? WHERE id = ?', [newCoverPath, seriesId]);
+
+          // Update Local State with a cache-buster logic if needed, but for now just path
+          // If the path is the same (cover.jpg), we might need to force re-render in component
+          // For now, we update the store.
+          set(state => ({
+              series: state.series.map(s => s.id === seriesId ? { ...s, cover: newCoverPath } : s)
+          }));
+          
+          await get().loadFromDb(); // Ensure consistency
+      } catch (e) {
+          console.error('Failed to set cover', e);
+          throw e;
+      }
+  },
+
+  removeSeriesCover: async (seriesId) => {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const db = getDb();
+      const series = get().series.find(s => s.id === seriesId);
+      if (!series) return;
+
+      try {
+          await invoke('remove_manga_cover', { seriesPath: series.path });
+          
+          await db.execute('UPDATE Series SET coverPath = NULL WHERE id = ?', [seriesId]);
+
+          set(state => ({
+              series: state.series.map(s => s.id === seriesId ? { ...s, cover: null } : s)
+          }));
+          
+          await get().loadFromDb();
+      } catch (e) {
+          console.error('Failed to remove cover', e);
+          throw e;
+      }
+  },
+
   registerDownloadedSeries: async (metadata: any, chapters: any[]) => {
       const db = getDb();
       try {
@@ -217,5 +292,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                 await get().addMangaFolder(libraryPath);
             }
         }
-  }
+  },
+
+  // Navigation State
+  selectedSeriesId: null,
+  setSelectedSeriesId: (id) => set({ selectedSeriesId: id }),
 }));

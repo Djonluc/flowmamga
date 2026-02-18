@@ -4,26 +4,26 @@ import { type DownloadJob } from '../types';
 
 interface DownloadState {
     queue: DownloadJob[];
-    activeJobId: string | null;
-    isProcessing: boolean;
-
+    activeJobIds: string[];
+    
     addJob: (job: Omit<DownloadJob, 'status' | 'progress' | 'downloadedChapters'>) => void;
     removeJob: (id: string) => void;
     pauseJob: (id: string) => void;
     resumeJob: (id: string) => void;
     updateJobProgress: (id: string, progress: number, downloadedChapters?: number) => void;
     updateJobStatus: (id: string, status: DownloadJob['status']) => void;
-    startNextJob: () => Promise<void>;
+    startQueue: () => Promise<void>;
     retryJob: (id: string) => void;
     clearCompleted: () => void;
 }
+
+const MAX_CONCURRENT_JOBS = 3;
 
 export const useDownloadStore = create<DownloadState>()(
     persist(
         (set, get) => ({
             queue: [],
-            activeJobId: null,
-            isProcessing: false,
+            activeJobIds: [],
 
             addJob: (jobData) => {
                 const newJob: DownloadJob = {
@@ -33,25 +33,16 @@ export const useDownloadStore = create<DownloadState>()(
                     downloadedChapters: 0,
                 };
                 
-                // Add to queue
                 set((state) => ({ queue: [...state.queue, newJob] }));
-
-                // Auto-start if idle
-                const { isProcessing, activeJobId } = get();
-                if (!isProcessing && !activeJobId) {
-                    get().startNextJob();
-                }
+                get().startQueue();
             },
 
             removeJob: (id) => {
                 set((state) => ({
                     queue: state.queue.filter(job => job.id !== id),
-                    activeJobId: state.activeJobId === id ? null : state.activeJobId
+                    activeJobIds: state.activeJobIds.filter(jobId => jobId !== id)
                 }));
-                // If we removed the active job, try starting next
-                if (get().activeJobId === null) {
-                    get().startNextJob();
-                }
+                get().startQueue();
             },
 
             pauseJob: (id) => {
@@ -59,12 +50,9 @@ export const useDownloadStore = create<DownloadState>()(
                     queue: state.queue.map(job => 
                         job.id === id ? { ...job, status: 'paused' } : job
                     ),
-                    activeJobId: state.activeJobId === id ? null : state.activeJobId
+                    activeJobIds: state.activeJobIds.filter(jobId => jobId !== id)
                 }));
-                // If paused active, start next
-                if (get().activeJobId === null) {
-                    get().startNextJob();
-                }
+                get().startQueue();
             },
 
             resumeJob: (id) => {
@@ -73,11 +61,7 @@ export const useDownloadStore = create<DownloadState>()(
                         job.id === id ? { ...job, status: 'queued' } : job
                     )
                 }));
-                // Auto-trigger queue check
-                const { isProcessing, activeJobId } = get();
-                if (!isProcessing && !activeJobId) {
-                    get().startNextJob();
-                }
+                get().startQueue();
             },
 
             retryJob: (id) => {
@@ -86,10 +70,7 @@ export const useDownloadStore = create<DownloadState>()(
                         job.id === id ? { ...job, status: 'queued', progress: 0 } : job
                     )
                 }));
-                const { isProcessing, activeJobId } = get();
-                if (!isProcessing && !activeJobId) {
-                    get().startNextJob();
-                }
+                get().startQueue();
             },
 
             updateJobProgress: (id, progress, downloadedChapters) => {
@@ -109,8 +90,9 @@ export const useDownloadStore = create<DownloadState>()(
                     queue: state.queue.map(job => 
                         job.id === id ? { ...job, status } : job
                     ),
-                    // If job finished, clear active
-                    activeJobId: (status === 'completed' || status === 'failed') && state.activeJobId === id ? null : state.activeJobId
+                    activeJobIds: (status === 'completed' || status === 'failed') 
+                        ? state.activeJobIds.filter(jobId => jobId !== id)
+                        : state.activeJobIds
                 }));
             },
 
@@ -120,36 +102,61 @@ export const useDownloadStore = create<DownloadState>()(
                 }));
             },
 
-            startNextJob: async () => {
-                const { queue, activeJobId, isProcessing } = get();
-                if (isProcessing || activeJobId) return;
-
-                // Find next queued job
-                const nextJob = queue.find(j => j.status === 'queued');
-                if (!nextJob) return;
-
-                set({ activeJobId: nextJob.id, isProcessing: true });
+            startQueue: async () => {
+                const { queue, activeJobIds } = get();
                 
-                // Update Status
-                get().updateJobStatus(nextJob.id, 'downloading');
+                // 1. Clean up activeJobIds from state (just in case)
+                const currentActive = activeJobIds.filter(id => 
+                    queue.find(j => j.id === id && j.status === 'downloading')
+                );
 
-                // Dynamic Import Service to avoid cycles
-                try {
-                    // eslint-disable-next-line @typescript-eslint/no-var-requires
-                    const { DownloadService } = await import('../services/DownloadService');
-                    await DownloadService.processJob(nextJob);
-                } catch (error) {
-                    console.error('Job failed', error);
-                    get().updateJobStatus(nextJob.id, 'failed');
-                } finally {
-                    set({ isProcessing: false, activeJobId: null });
-                    // Recursive call to process next
-                    get().startNextJob();
+                if (currentActive.length >= MAX_CONCURRENT_JOBS) return;
+
+                // 2. Find next available jobs
+                const nextJobs = queue
+                    .filter(j => j.status === 'queued')
+                    .slice(0, MAX_CONCURRENT_JOBS - currentActive.length);
+
+                if (nextJobs.length === 0) return;
+
+                // 3. Mark as active and start
+                set({ activeJobIds: [...currentActive, ...nextJobs.map(j => j.id)] });
+
+                for (const job of nextJobs) {
+                    get().updateJobStatus(job.id, 'downloading');
+                    
+                    // Fire and forget (independent workers)
+                    (async () => {
+                        try {
+                            const { DownloadService } = await import('../services/DownloadService');
+                            await DownloadService.processJob(job, get());
+                        } catch (error) {
+                            console.error(`[Queue] Job ${job.id} failed`, error);
+                            get().updateJobStatus(job.id, 'failed');
+                        } finally {
+                            set(state => ({
+                                activeJobIds: state.activeJobIds.filter(id => id !== job.id)
+                            }));
+                            get().startQueue(); // Check for more
+                        }
+                    })();
                 }
             }
         }),
         {
-            name: 'download-storage', // Persistence key
+            name: 'download-storage',
+            onRehydrateStorage: () => (state) => {
+                // Ensure everything that was "downloading" becomes "queued" on restart
+                // because workers don't survive restart if not using a separate process.
+                // In Tauri, unless we use sidecars, simple async jobs stop.
+                if (state) {
+                    state.activeJobIds = [];
+                    state.queue = state.queue.map(j => 
+                        j.status === 'downloading' ? { ...j, status: 'queued' } : j
+                    );
+                    state.startQueue();
+                }
+            }
         }
     )
 );

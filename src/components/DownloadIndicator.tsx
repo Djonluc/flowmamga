@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { DownloadPanel } from './DownloadPanel';
 
 export const DownloadIndicator = () => {
-    const { queue, isProcessing, activeJobId } = useDownloadStore();
+    const { queue, activeJobIds } = useDownloadStore();
+    const isProcessing = activeJobIds.length > 0;
     const [isPanelOpen, setIsPanelOpen] = useState(false);
 
     // Filter interesting jobs (active or queued)
@@ -13,7 +14,7 @@ export const DownloadIndicator = () => {
     const completedJobs = queue.filter(j => j.status === 'completed');
 
     const totalActive = activeJobs.length;
-    const currentJob = queue.find(j => j.id === activeJobId);
+    const currentJob = queue.find(j => j.id === activeJobIds[0]);
     
     // Auto-hide when empty? Or show icon always?
     // User requested "Downloads (2)" in sidebar/topbar.
@@ -27,7 +28,7 @@ export const DownloadIndicator = () => {
             <motion.button
                 layout
                 onClick={() => setIsPanelOpen(true)}
-                className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-full shadow-2xl hover:bg-white/20 transition-colors group"
+                className="fixed top-6 right-6 z-50 flex items-center gap-3 px-4 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-full shadow-2xl hover:bg-white/20 transition-colors group"
                 initial={{ scale: 0.8, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.8, opacity: 0, y: 20 }}

@@ -11,18 +11,20 @@ export const QuickSettings = () => {
         mode, setMode, 
         autoScroll, setAutoScroll, 
         scrollSpeed, setScrollSpeed,
-        slideshowDelay, setSlideshowDelay,
         slideshowActive, setSlideshowActive
     } = useReaderStore();
     
-    const { isFullscreen, toggleFullScreenAction, toggleSettings } = useSettingsStore();
+    const { 
+        isFullscreen, toggleFullScreenAction, toggleSettings,
+        slideshowInterval, setSlideshowInterval 
+    } = useSettingsStore();
 
     const handleSpeedChange = (delta: number) => {
         setScrollSpeed(Math.max(10, Math.min(500, scrollSpeed + delta)));
     };
 
     const handleDelayChange = (delta: number) => {
-        setSlideshowDelay(Math.max(1000, Math.min(20000, slideshowDelay + delta)));
+        setSlideshowInterval(Math.max(1000, Math.min(20000, slideshowInterval + delta)));
     };
 
     return (
@@ -104,7 +106,7 @@ export const QuickSettings = () => {
                                     <div className="flex items-center justify-between">
                                         <div className="flex flex-col">
                                             <span className="text-[10px] font-bold text-white uppercase tracking-wider">Frame Delay</span>
-                                            <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">{(slideshowDelay / 1000).toFixed(1)}s</span>
+                                            <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">{(slideshowInterval / 1000).toFixed(1)}s</span>
                                         </div>
                                         <button 
                                             onClick={() => setSlideshowActive(!slideshowActive)}
@@ -122,7 +124,7 @@ export const QuickSettings = () => {
                                             <motion.div 
                                                 className="h-full bg-purple-500"
                                                 initial={false}
-                                                animate={{ width: `${(slideshowDelay / 20000) * 100}%` }}
+                                                animate={{ width: `${(slideshowInterval / 20000) * 100}%` }}
                                             />
                                         </div>
                                         <button onClick={() => handleDelayChange(500)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-white/10 transition-colors"><Plus size={14} /></button>

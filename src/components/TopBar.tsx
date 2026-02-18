@@ -1,14 +1,20 @@
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useReadingStore } from '../stores/useReadingStore';
-import { Search, Command, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { useLibraryStore } from '../stores/useLibraryStore';
+import { useDownloadStore } from '../stores/useDownloadStore';
+import { Search, Command, LayoutGrid, SlidersHorizontal, Download } from 'lucide-react';
+import clsx from 'clsx';
 
 export const TopBar = () => {
-    const { activeView } = useSettingsStore();
+    const { activeView, toggleDownloadPanel } = useSettingsStore();
     const { images } = useReadingStore();
+    const { activeJobIds, queue } = useDownloadStore();
+
+    const activeCount = activeJobIds.length;
+    const queueCount = queue.length;
+    const hasDownloads = activeCount > 0 || queueCount > 0;
 
     // Don't show global top bar in reader mode if it has its own
-    // However, V3 spec says Reader UI overhaul has its own top bar logic.
-    // For now, let's make it flexible.
     if (images.length > 0) return null;
 
     return (
@@ -26,6 +32,7 @@ export const TopBar = () => {
                     <input 
                         type="text"
                         placeholder="Search anything..."
+                        onChange={(e) => useLibraryStore.getState().setSearchQuery(e.target.value)}
                         className="bg-white/5 border border-white/5 rounded-xl py-2 pl-10 pr-4 text-xs w-64 focus:outline-none focus:bg-white/10 focus:border-blue-500/30 transition-all"
                     />
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-neutral-500 font-bold uppercase tracking-tighter">
@@ -33,6 +40,24 @@ export const TopBar = () => {
                         <span>K</span>
                     </div>
                 </div>
+
+                <div className="h-4 w-px bg-white/10" />
+
+                 {/* Download Indicator */}
+                 <button 
+                    onClick={toggleDownloadPanel}
+                    className={clsx(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border",
+                        hasDownloads || activeCount > 0
+                            ? "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20" 
+                            : "bg-transparent border-transparent text-neutral-500 hover:bg-white/5 hover:text-neutral-300"
+                    )}
+                >
+                    <Download size={16} className={clsx(activeCount > 0 && "animate-bounce")} />
+                    {(hasDownloads || activeCount > 0) && (
+                        <span className="text-[10px] font-bold">{activeCount > 0 ? activeCount : queueCount}</span>
+                    )}
+                </button>
 
                 <div className="h-4 w-px bg-white/10" />
 

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { ScraperService, type ScrapedImage, type ScrapeResult } from '../services/ScraperService';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useSettingsStore } from './useSettingsStore';
 
 interface ScraperState {
@@ -20,6 +19,7 @@ interface ScraperState {
     setUrl: (url: string) => void;
     scrape: () => Promise<void>;
     download: () => Promise<void>;
+    performQueueDownload: (mangaRoot: string, force: boolean) => Promise<void>;
     setSelectedChapters: (keys: string[]) => void;
     reset: () => void;
 }
@@ -124,31 +124,48 @@ export const useScraperStore = create<ScraperState>((set, get) => ({
     },
     
     download: async () => {
-        const { scrapedImages, metadata, chapterFeed, selectedChapterKeys } = get();
-        if (!metadata || (scrapedImages.length === 0 && selectedChapterKeys.length === 0)) return;
+        const { metadata } = get();
+        if (!metadata) return;
         
         // 1. Get or Pick Base Directory (Centralized Library)
-        let libraryPath = useSettingsStore.getState().libraryPath;
-        if (!libraryPath) {
-            const selectedDir = await open({
-                directory: true,
-                multiple: false,
-                title: 'Select your Main Manga Library folder',
-            });
-            
-            if (!selectedDir || Array.isArray(selectedDir)) {
-                return;
-            }
-            libraryPath = selectedDir;
-            useSettingsStore.getState().setLibraryPath(libraryPath);
+        const { downloadPath: settingsPath, setLocationModalOpen } = useSettingsStore.getState();
+        
+        if (!settingsPath) {
+            setLocationModalOpen(true);
+            return;
         }
         
+        const libraryPath = settingsPath;
         set({ downloadPath: libraryPath });
 
-        // 2. Prepare Data
+        // 2. Prepare Data & Check Existence
         const safeTitle = ScraperService.sanitizeFilename(metadata.title || 'Unknown');
         const mangaRoot = `${libraryPath}/${safeTitle}`;
         
+        const { exists } = await import('@tauri-apps/plugin-fs');
+        const folderExists = await exists(mangaRoot);
+
+        if (folderExists) {
+            const { setSafetyCheckModal } = useSettingsStore.getState();
+            setSafetyCheckModal(true, metadata.title || 'Unknown Series', (action) => {
+                if (action === 'redownload') {
+                    // Force start (will overwrite files)
+                    get().performQueueDownload(mangaRoot, true);
+                } else if (action === 'update') {
+                    // Normal start (will skip existing if we added that logic, or just append)
+                    get().performQueueDownload(mangaRoot, false);
+                }
+            });
+            return;
+        }
+
+        get().performQueueDownload(mangaRoot, false);
+    },
+
+    performQueueDownload: async (mangaRoot: string, _force: boolean) => {
+        const { metadata, chapterFeed, selectedChapterKeys, scrapedImages } = get();
+        if (!metadata) return;
+
         const chaptersToDownload = chapterFeed.filter(c => selectedChapterKeys.includes(c.id));
         
         // Handle Manual Chapter (Scraped directly without feed)
@@ -196,8 +213,8 @@ export const useScraperStore = create<ScraperState>((set, get) => ({
             selectedChapterKeys: [],
             error: null
         });
-        
-        // Optional: Trigger UI notification here if we had a toast system
+
+        useSettingsStore.getState().setActiveView('library');
     },
     
     reset: () => set({ 
