@@ -4,36 +4,32 @@ import { useSettingsStore } from '../stores/useSettingsStore';
 // Placeholder sounds (Creative Commons or Free use where possible, or generated noise)
 // For now, we use online samples. In production, these should be local assets.
 const SOUNDS: Record<string, string> = {
+    lofi: 'https://stream.zeno.fm/0r0xa792kwzuv', // Lofi Hip Hop stream (example)
     rain: 'https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg',
     cafe: 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg',
     wind: 'https://actions.google.com/sounds/v1/weather/wind_blowing.ogg',
     space: 'https://actions.google.com/sounds/v1/science_fiction/space_station_ambience.ogg',
-    paper: 'https://actions.google.com/sounds/v1/foley/page_turning.ogg' // Just a placeholder, ideally continuous paper noise
 };
 
 export const AmbientSoundPlayer = () => {
-    const { theme, ambientVolume } = useSettingsStore();
+    const { ambientVolume, selectedAmbientSound, readingMode, isAutoScrolling } = useSettingsStore();
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
-        // Map theme to sound
         let soundUrl = '';
-        switch (theme) {
-            case 'dark':
-            case 'cyberpunk':
-                soundUrl = SOUNDS.rain;
-                break;
-            case 'paper':
-                soundUrl = SOUNDS.cafe; // Read in a cafe vibe
-                break;
-            case 'oled':
-                soundUrl = SOUNDS.space; // Deep space silence/hum
-                break;
-            case 'light':
-                soundUrl = SOUNDS.wind;
-                break;
-            default:
-                soundUrl = '';
+        
+        // Music plays if:
+        // 1. Manual sound is selected (not 'none')
+        // 2. Automate slideshow is active
+        const shouldPlay = (selectedAmbientSound !== 'none') || (readingMode === 'slideshow' && isAutoScrolling);
+
+        if (shouldPlay) {
+            if (selectedAmbientSound !== 'none') {
+                soundUrl = SOUNDS[selectedAmbientSound] || '';
+            } else {
+                // Default to a cozy lofi/rain vibe for slideshow if no manual sound is set
+                soundUrl = SOUNDS.lofi; 
+            }
         }
 
         if (!audioRef.current) {
@@ -46,7 +42,14 @@ export const AmbientSoundPlayer = () => {
         if (soundUrl) {
             if (audio.src !== soundUrl) {
                 audio.src = soundUrl;
-                audio.play().catch(e => console.warn("Audio autoplay blocked", e));
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => {
+                        if (e.name !== 'AbortError') {
+                            console.warn("Audio autoplay blocked", e);
+                        }
+                    });
+                }
             }
         } else {
             audio.pause();
@@ -54,9 +57,9 @@ export const AmbientSoundPlayer = () => {
         }
 
         return () => {
-            audio.pause();
+            // No need to pause here if we want continuous play, but reacting to theme/selection change
         };
-    }, [theme]);
+    }, [selectedAmbientSound, readingMode, isAutoScrolling]);
 
     useEffect(() => {
         if (audioRef.current) {

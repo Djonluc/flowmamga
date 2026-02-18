@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type ReadingMode = 'vertical' | 'single' | 'slideshow' | 'horizontal';
+export type ReadingMode = 'vertical' | 'single' | 'dual' | 'slideshow' | 'horizontal';
 export type Theme = 'dark' | 'light' | 'oled' | 'paper' | 'cyberpunk';
 
 interface SettingsState {
@@ -13,11 +13,13 @@ interface SettingsState {
   fitMode: 'width' | 'height' | 'original' | 'smart';
   zoomScale: number; // Global zoom preference
   sidebarOpen: boolean;
-  activeView: 'home' | 'library' | 'analytics';
-  setActiveView: (view: 'home' | 'library' | 'analytics') => void;
+  activeView: 'home' | 'library' | 'analytics' | 'videos' | 'history';
+  setActiveView: (view: 'home' | 'library' | 'analytics' | 'videos' | 'history') => void;
   
   libraryViewMode: 'grid' | 'shelf';
+  libraryDensity: 'compact' | 'comfortable' | 'cinematic';
   setLibraryViewMode: (mode: 'grid' | 'shelf') => void;
+  setLibraryDensity: (density: 'compact' | 'comfortable' | 'cinematic') => void;
   toggleLibraryViewMode: () => void;
 
   isFullscreen: boolean;
@@ -54,7 +56,9 @@ interface SettingsState {
 
   autoScrollSpeed: number; // pixels per frame/second
   isAutoScrolling: boolean;
-  accentColor: string; // Dynamic color based on current page
+  accentColor: string;
+  isInitializing: boolean;
+  selectedAmbientSound: string;
   
   setBrightness: (val: number) => void;
   setContrast: (val: number) => void;
@@ -63,6 +67,11 @@ interface SettingsState {
   setAutoScrollSpeed: (speed: number) => void;
   toggleAutoScrolling: () => void;
   setAccentColor: (color: string) => void;
+  setInitializing: (init: boolean) => void;
+  setSelectedAmbientSound: (sound: string) => void;
+  
+  libraryPath: string | null;
+  setLibraryPath: (path: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -79,18 +88,24 @@ export const useSettingsStore = create<SettingsState>()(
       setActiveView: (view) => set({ activeView: view }),
 
       libraryViewMode: 'grid',
+      libraryDensity: 'comfortable',
       setLibraryViewMode: (mode) => set({ libraryViewMode: mode }),
+      setLibraryDensity: (density) => set({ libraryDensity: density }),
       toggleLibraryViewMode: () => set((state) => ({ 
         libraryViewMode: state.libraryViewMode === 'grid' ? 'shelf' : 'grid' 
       })),
 
       isFullscreen: false,
       setFullscreenState: (f) => set({ isFullscreen: f }),
-      toggleFullScreenAction: () => {
-        if (window.electron) {
-            window.electron.toggleFullScreen().then((full: boolean) => {
-                set({ isFullscreen: full });
-            });
+      toggleFullScreenAction: async () => {
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          const appWindow = getCurrentWindow();
+          const isFull = await appWindow.isFullscreen();
+          await appWindow.setFullscreen(!isFull);
+          set({ isFullscreen: !isFull });
+        } catch (err) {
+          console.error('[Settings] Failed to toggle fullscreen:', err);
         }
       },
 
@@ -132,12 +147,24 @@ export const useSettingsStore = create<SettingsState>()(
       autoScrollSpeed: 2, // Default speed
       isAutoScrolling: false,
       accentColor: '#3b82f6', // Default blue-500
+      isInitializing: true,
       setAutoScrollSpeed: (speed) => set({ autoScrollSpeed: speed }),
       toggleAutoScrolling: () => set((state) => ({ isAutoScrolling: !state.isAutoScrolling })),
       setAccentColor: (color) => set({ accentColor: color }),
+      setInitializing: (init) => set({ isInitializing: init }),
+      selectedAmbientSound: 'none',
+      setSelectedAmbientSound: (sound) => set({ selectedAmbientSound: sound }),
+
+      // Library Persistence
+      libraryPath: null,
+      setLibraryPath: (path) => set({ libraryPath: path }),
     }),
     {
       name: 'flowmanga-settings',
+      partialize: (state) => {
+        const { isInitializing, ...rest } = state;
+        return rest;
+      },
     }
   )
 );

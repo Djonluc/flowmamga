@@ -225,20 +225,22 @@ export async function batchFetchMetadata(titles: string[]): Promise<Map<string, 
 // Download and cache cover image
 export async function downloadCover(coverUrl: string, mangaId: string): Promise<string | null> {
   try {
+    const { writeFile, BaseDirectory, mkdir } = await import('@tauri-apps/plugin-fs');
     const response = await fetch(coverUrl);
     if (!response.ok) return null;
     
-    const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const arrayBuffer = await response.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
     
-    // Save to local cache directory
-    if (window.electron?.saveCoverImage) {
-      const localPath = await window.electron.saveCoverImage(mangaId, buffer);
-      return localPath;
-    }
+    // Ensure covers directory exists
+    await mkdir('covers', { baseDir: BaseDirectory.AppData, recursive: true });
     
-    return null;
+    const fileName = `cover_${mangaId}.jpg`;
+    const localPath = `covers/${fileName}`;
+    
+    await writeFile(localPath, uint8Array, { baseDir: BaseDirectory.AppData });
+    
+    return localPath;
   } catch (error) {
     console.error('Cover download error:', error);
     return null;

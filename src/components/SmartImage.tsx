@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useSettingsStore } from '../stores/useSettingsStore';
 
 interface SmartImageProps {
@@ -11,30 +11,53 @@ interface SmartImageProps {
 
 export const SmartImage = ({ src, alt, className, style, onLoad }: SmartImageProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [isVisible, setIsVisible] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
     const { brightness, contrast, saturation, autoCrop } = useSettingsStore(); 
-    // brightness/contrast/saturation might not be in store yet, need to check/add
 
     useEffect(() => {
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                setIsVisible(true);
+            } else {
+                setIsVisible(false);
+            }
+        }, { rootMargin: '400px' });
+
+        if (canvasRef.current) observer.observe(canvasRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (!isVisible) {
+            // Clear canvas to free memory when off-screen
+            const canvas = canvasRef.current;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx?.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            return;
+        }
+        
         const img = new Image();
         img.src = src;
-        img.crossOrigin = "anonymous"; // Needed for canvas manipulation if external
+        img.crossOrigin = "anonymous"; 
 
         img.onload = () => {
             setIsLoaded(true);
             renderImage(img);
             if (onLoad) onLoad();
         };
-    }, [src]);
+    }, [src, isVisible]);
 
     useEffect(() => {
-        if (isLoaded) {
+        if (isLoaded && isVisible) {
             const img = new Image();
             img.src = src;
             img.crossOrigin = "anonymous";
             img.onload = () => renderImage(img);
         }
-    }, [brightness, contrast, saturation, autoCrop, isLoaded]);
+    }, [brightness, contrast, saturation, autoCrop, isLoaded, isVisible]);
 
     const renderImage = (img: HTMLImageElement) => {
         const canvas = canvasRef.current;

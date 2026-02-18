@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useRef } from 'react';
 import clsx from 'clsx';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 interface ShelfViewProps {
     allSeries: any[];
@@ -50,7 +51,7 @@ export const ShelfView = ({ allSeries, onOpenItem }: ShelfViewProps) => {
 const Book = ({ item, onClick }: { item: any, onClick: () => void }) => {
     const isSeries = 'books' in item;
     const coverSrc = item?.cover 
-        ? (item.cover.startsWith('http') ? item.cover : `media:///${item.cover}`)
+        ? (item.cover.startsWith('http') ? item.cover : convertFileSrc(item.cover))
         : null;
 
     return (
@@ -95,6 +96,17 @@ const Book = ({ item, onClick }: { item: any, onClick: () => void }) => {
                             CH {item.meta.chapter}
                         </div>
                     ) : null}
+
+                    {/* Progress Bar */}
+                    {!isSeries && item.progress && item.progress.totalPages > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/40 backdrop-blur-sm">
+                            <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${(item.progress.currentPage / (item.progress.totalPages - 1)) * 100}%` }}
+                                className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Book Spine (3D Depth) */}

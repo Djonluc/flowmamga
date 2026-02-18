@@ -1,10 +1,10 @@
-
 import { useEffect } from 'react';
 import { useReadingStore } from '../stores/useReadingStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 export const useAdaptiveColor = () => {
-    const { images, currentIndex } = useReadingStore();
+    const { images, currentPageIndex: currentIndex } = useReadingStore();
     const { setAccentColor, theme } = useSettingsStore();
 
     useEffect(() => {
@@ -14,7 +14,9 @@ export const useAdaptiveColor = () => {
         }
 
         const currentImage = images[currentIndex];
-        const imgUrl = currentImage.startsWith('http') ? currentImage : `media:///${currentImage}`;
+        if (!currentImage) return;
+
+        const imgUrl = currentImage.startsWith('http') ? currentImage : convertFileSrc(currentImage);
 
         const img = new Image();
         img.crossOrigin = "Anonymous";

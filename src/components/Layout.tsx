@@ -1,24 +1,48 @@
 import type { ReactNode } from 'react';
-import { TitleBar } from './TitleBar';
+import { Sidebar } from './Sidebar';
+import { TopBar } from './TopBar';
 import { useSettingsStore } from '../stores/useSettingsStore';
-import clsx from 'clsx';
+import { ToastContainer } from './Toast';
+import { ShortcutsGuide } from './ShortcutsGuide';
+import { ShortcutsManager } from './ShortcutsManager';
+import { AmbientBackground } from './AmbientBackground';
+import { AmbientSoundPlayer } from './AmbientSoundPlayer';
+import { CommandPalette } from './CommandPalette';
 
 interface LayoutProps {
-  children: ReactNode;
+    children: ReactNode;
+    hideSidebar?: boolean;
 }
 
-export const Layout = ({ children }: LayoutProps) => {
-  const { theme } = useSettingsStore();
+export const Layout = ({ children, hideSidebar = false }: LayoutProps) => {
+    const { theme } = useSettingsStore();
 
-  return (
-    <div className={clsx(
-      "h-screen w-screen flex flex-col overflow-hidden transition-colors duration-300",
-      theme === 'dark' ? 'bg-black text-white' : 'bg-neutral-50 text-neutral-900'
-    )}>
-      <TitleBar />
-      <main className="flex-1 relative overflow-hidden">
-        {children}
-      </main>
-    </div>
-  );
+    return (
+        <div 
+            className="h-screen w-screen overflow-hidden bg-background text-foreground transition-colors duration-300 relative flex flex-row" 
+            data-theme={theme}
+        >
+            {/* Global Systems */}
+            <CommandPalette />
+            <AmbientBackground />
+            <AmbientSoundPlayer />
+            <ShortcutsManager />
+            <ShortcutsGuide />
+            <ToastContainer />
+
+            {/* V3 Layout Roots */}
+            
+            {/* 1. Sidebar */}
+            {!hideSidebar && <Sidebar />}
+
+            {/* 2. Main Content Area */}
+            <div className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden">
+                <TopBar />
+                
+                <main className="flex-1 relative overflow-hidden bg-transparent">
+                    {children}
+                </main>
+            </div>
+        </div>
+    );
 };

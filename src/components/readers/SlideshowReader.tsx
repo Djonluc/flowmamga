@@ -1,66 +1,81 @@
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useRef } from 'react';
 import { useReadingStore } from '../../stores/useReadingStore';
-import { useSettingsStore } from '../../stores/useSettingsStore';
-import { Play, Pause } from 'lucide-react';
+import { useReaderStore } from '../../stores/useReaderStore';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { SmartImage } from '../SmartImage';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const SlideshowReader = () => {
-  const { images, currentIndex, nextPage } = useReadingStore();
-  const { slideshowInterval } = useSettingsStore();
-  const [isPlaying, setIsPlaying] = useState(true);
+    const { images } = useReadingStore();
+    const { 
+        slideshowActive, 
+        slideshowDelay, 
+        currentPage, 
+        setCurrentPage, 
+        setSlideshowActive,
+        totalPages 
+    } = useReaderStore();
+    
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (isPlaying) {
-      console.log('Slideshow starting', slideshowInterval);
-      interval = setInterval(() => {
-        nextPage();
-      }, slideshowInterval);
-    }
-    return () => {
-        if (interval) clearInterval(interval);
-    };
-  }, [isPlaying, slideshowInterval, nextPage]);
+    // SLIDESHOW ENGINE
+    useEffect(() => {
+        if (!slideshowActive) return;
 
-  const currentImage = images[currentIndex];
-  if (!currentImage) return null;
+        intervalRef.current = setInterval(() => {
+            setCurrentPage(useReaderStore.getState().currentPage + 1);
+        }, slideshowDelay);
 
-  return (
-    <div className="w-full h-full flex items-center justify-center relative overflow-hidden bg-black">
-      {/* Play/Pause Indicator (Overlay) */}
-      <div 
-        className="absolute inset-0 z-20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer bg-black/20 backdrop-blur-sm"
-        onClick={() => setIsPlaying(!isPlaying)}
-      >
-        <div className="p-4 rounded-full bg-white/20 backdrop-blur-md">
-          {isPlaying ? <Pause size={48} className="text-white" /> : <Play size={48} className="text-white" />}
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [slideshowActive, slideshowDelay]);
+
+    // End of Chapter Check
+    // End of Chapter Check
+    useEffect(() => {
+        if (currentPage >= totalPages && totalPages > 0) {
+            const store = useReadingStore.getState();
+            if (store.currentChapterIndex + 1 < store.chapters.length) {
+                // Transition to Next Chapter
+                store.goToNextChapter();
+            } else {
+                // End of Series
+                setSlideshowActive(false);
+                setCurrentPage(totalPages - 1);
+            }
+        }
+    }, [currentPage, totalPages, setSlideshowActive, setCurrentPage]);
+
+    const currentImage = images[currentPage];
+    if (!currentImage) return null;
+
+    return (
+        <div className="slideshow-reader w-full h-full flex items-center justify-center bg-black overflow-hidden relative">
+            <AnimatePresence mode="wait">
+                <motion.div
+                   key={currentImage}
+                   initial={{ opacity: 0 }}
+                   animate={{ opacity: 1 }}
+                   exit={{ opacity: 0 }}
+                   transition={{ duration: 0.8 }}
+                   className="w-full h-full flex items-center justify-center px-4"
+                >
+                    <SmartImage
+                        src={currentImage.startsWith('http') ? currentImage : convertFileSrc(currentImage)}
+                        alt={`Slide ${currentPage + 1}`}
+                        className="max-w-full max-h-full object-contain shadow-2xl"
+                    />
+                </motion.div>
+            </AnimatePresence>
+            
+            {/* Status Indicator */}
+            <div className="absolute bottom-10 left-10 flex items-center gap-3 bg-black/40 backdrop-blur-xl border border-white/5 px-4 py-2 rounded-full">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">
+                    Streaming Slide <span className="text-white/20">•</span> {(slideshowDelay / 1000).toFixed(1)}s
+                </span>
+            </div>
         </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="absolute top-0 left-0 h-1 bg-blue-500 z-30 transition-all duration-300"
-           style={{ width: `${((currentIndex + 1) / images.length) * 100}%` }} />
-
-      {/* Image Display */}
-      <AnimatePresence mode="wait">
-        <motion.img
-          key={currentImage}
-          src={currentImage.startsWith('http') ? currentImage : `media:///${currentImage}`}
-          alt={`Page ${currentIndex + 1}`}
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1, ease: "easeInOut" }}
-          className="max-h-full max-w-full object-contain"
-        />
-      </AnimatePresence>
-      
-      {/* Info */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 px-4 py-1.5 rounded-full text-white text-sm font-medium backdrop-blur-md border border-white/10 flex gap-2 items-center">
-        <span>Page {currentIndex + 1} / {images.length}</span>
-        <span className="w-px h-3 bg-white/20" />
-        <span className="text-xs text-neutral-400">{slideshowInterval / 1000}s</span>
-      </div>
-    </div>
-  );
+    );
 };

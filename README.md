@@ -4,14 +4,14 @@
 
 # FlowManga 🎨📚
 
-**A Cinematic Manga Reading Experience**
+**Your Personal Manga Library Manager**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat-square&logo=react)](https://reactjs.org/)
-[![Electron](https://img.shields.io/badge/Electron-40.4-47848F?style=flat-square&logo=electron)](https://www.electronjs.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat-square&logo=tauri)](https://tauri.app/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 
-*Transform your local manga collection into an immersive, cinematic reading experience with FlowManga.*
+*Transform your reading experience with a cinematic, self-hosted manga library manager. FlowManga combines the power of a local file system with smart cloud integration.*
 
 [Features](#-features) • [Installation](#-installation) • [Tech Stack](#-tech-stack) • [Roadmap](#-roadmap)
 
@@ -21,61 +21,55 @@
 
 ## ✨ Features
 
-### 🎯 Core Reading Experience
-- **Multiple Reading Modes**: Vertical scroll, horizontal page flip, single-page, and slideshow
-- **Auto-Scroll**: Hands-free reading with adjustable speed
-- **Smart Image Loading**: Optimized performance with lazy loading and caching
-- **Zoom Controls**: Pinch-to-zoom and fit-to-width/height modes
-- **Progress Tracking**: Automatic bookmark and reading history
+### 🚀 Smart Library Management
+- **Personal Archive**: Your manga, your files. Full control over organization with a robust local file system backend.
+- **Smart Updates**: Automatically tracks source URLs (MangaDex support) and notifies you of new chapters.
+- **Background Downloads**: Queue hundreds of chapters with a powerful, concurrent download manager that works silently while you read.
+- **Metadata Intelligence**: Parses series info, authors, and genres automatically.
 
-### 📚 Library Management
-- **Local & Web Sources**: Import from folders or web sources (MangaDex, Webtoons, nHentai, etc.)
-- **3D Shelf View**: Beautiful, interactive library with realistic book spines
-- **Series Organization**: Automatic grouping by series with metadata parsing
-- **Smart Covers**: Intelligent cover detection and fallback system
-- **Drag & Drop**: Quick import by dragging folders into the app
+### 🎯 Core Reading Experience
+- **Cinematic Modes**: Vertical Webtoon scroll, classic page flip, and immersive slideshows.
+- **Auto-Scroll**: Hands-free reading with adjustable speeds.
+- **Zoom & Fit**: Smart scaling for any screen size.
+- **Progress Sync**: Never lose your place with automatic bookmarking and history tracking.
 
 ### 🎨 Immersive UI/UX
-- **Adaptive Colors**: UI adapts to the colors of the current page
-- **Ambient Sounds**: Optional background audio (Rain, Lo-Fi, Nature)
-- **Fullscreen Mode**: Distraction-free reading
-- **Custom Themes**: Dark mode with customizable accents
-- **Keyboard Shortcuts**: Complete keyboard navigation support
+- **Adaptive Theming**: The interface colors evolve based on the current page's artwork.
+- **Ambient Audio**: Built-in soundscapes (Rain, Lo-Fi, Nature) to enhance your reading atmosphere.
+- **Distraction-Free**: Fullscreen mode tailored for deep immersion.
+- **Keyboard Control**: Complete shortcut support for power users.
 
-### 📊 Analytics & Gamification
-- **Reading Stats**: Track pages read, time spent, and reading streaks
-- **Achievements**: Unlock milestones for reading goals
-- **Session History**: View detailed reading sessions
-- **Trending Insights**: See your most-read series
+### 📊 Analytics & Insights (Coming Soon)
+- **Reading Stats**: Track your journey with detailed reading logs.
+- **Gamification**: Earn achievements and milestones.
 
 ---
 
 ## 🚀 Tech Stack
 
-### Frontend
-- **React 19** - Modern UI library with concurrent features
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first styling
-- **Framer Motion** - Smooth animations and transitions
-- **Zustand** - Lightweight state management
+### Frontend Architecture
+- **React 19** - Cutting-edge UI rendering.
+- **Framer Motion** - Silky smooth animations and transitions.
+- **Zustand** - Efficient, scalable state management.
+- **Tailwind CSS** - Modern, responsive styling system.
 
-### Desktop
-- **Electron 40** - Cross-platform desktop application
-- **Custom Protocol** - Secure local file access via `media://`
-- **File Watcher** - Real-time library updates with Chokidar
+### Native Power (Tauri 2)
+- **Rust Core**: Blazing fast backend logic for file operations and networking.
+- **SQLite**: Reliable, persistent local database.
+- **Asynchronous I/O**: Non-blocking operations for a responsive UI.
 
-### Web Integration
-- **Web Scrapers** - Support for popular manga sites
-- **Metadata Parsing** - Automatic series/chapter detection
-- **Image Optimization** - WebP conversion and caching
+### Integration
+- **MangaDex API**: Seamless search and download integration.
+- **Web Scrapers**: Extensible architecture for future sources.
 
 ---
 
 ## 📦 Installation
 
 ### Prerequisites
-- **Node.js 18+** and npm
-- **Windows/macOS/Linux** (Electron supports all platforms)
+- **Node.js 18+**
+- **Rust** (for building from source)
+- **Windows / macOS / Linux** support
 
 ### Quick Start
 
@@ -90,17 +84,15 @@
    npm install
    ```
 
-3. **Run in development mode**
+3. **Run Development Mode**
    ```bash
-   npm run dev
+   npm run tauri dev
    ```
 
-4. **Build for production**
+4. **Build Production Release**
    ```bash
-   npm run build
+   npm run tauri build
    ```
-
-The app will launch automatically in development mode. In production, the built executable will be in the `dist` folder.
 
 ---
 
@@ -108,25 +100,16 @@ The app will launch automatically in development mode. In production, the built 
 
 ```
 flowmamga/
-├── electron/                  # Electron main process
-│   ├── main.ts               # App initialization
-│   ├── preload.ts            # IPC bridge
-│   └── modules/
-│       └── FileLoader.ts     # Library scanning logic
-├── src/
-│   ├── components/           # React components
-│   │   ├── readers/          # Reading mode implementations
-│   │   ├── library/          # Library views (ShelfView, etc.)
-│   │   └── branding/         # DjonStNix signature components
-│   ├── stores/               # Zustand state stores
-│   │   ├── useLibraryStore.ts
-│   │   ├── useReadingStore.ts
-│   │   ├── useSettingsStore.ts
-│   │   └── useAnalyticsStore.ts
-│   ├── utils/                # Utilities
-│   │   └── webScrapers.ts    # Web manga fetchers
-│   └── hooks/                # Custom React hooks
-└── public/                   # Static assets
+├── src-tauri/                 # Rust Backend (Tauri 2)
+│   ├── src/lib.rs            # Command definitions & initialization
+│   ├── capabilities/         # Security permissions
+│   └── tauri.conf.json       # Application config
+├── src/                      # React Frontend
+│   ├── components/           # UI Components
+│   ├── stores/               # Zustand Stores (Download, Library, Reading)
+│   ├── services/             # Logic Services (DownloadService, UpdateManager)
+│   └── hooks/                # Custom React Hooks
+└── public/                   # Static Assets
 ```
 
 ---
@@ -134,34 +117,30 @@ flowmamga/
 ## 🎯 Roadmap
 
 ### ✅ Phase 1: Foundation (Complete)
-- [x] Electron app setup with custom protocol
-- [x] Multiple reading modes
-- [x] Local library scanning
+- [x] Local library scanning & file system integration
 - [x] 3D shelf visualization
+- [x] Basic reading modes (Vertical, Horizontal)
 
-### ✅ Phase 2: Enhanced UX (Complete)
-- [x] Adaptive color theming
+### ✅ Phase 2: Enhanced UI & Immersion (Complete)
+- [x] Adaptive color system
 - [x] Ambient sound player
-- [x] Analytics dashboard
-- [x] Web manga integration
+- [x] Keyboard navigation
+- [x] Dark mode architecture
 
-### 🚧 Phase 3: Smart Library Intelligence (In Progress)
-- [ ] AI-powered metadata extraction
-- [ ] Fuzzy search engine
-- [ ] Auto volume grouping
-- [ ] Reading recommendations
+### ✅ Phase 3: Connected Library (Complete)
+- [x] MangaDex search integration
+- [x] **Background Download Manager** (Queue, Pause, Resume)
+- [x] **Smart Updates** (Track sources, Metadata enhancement)
 
-### 📅 Phase 4: Gamification Layer
-- [ ] Achievement system
-- [ ] Streak leaderboards
-- [ ] Unlockable UI themes
-- [ ] Social reading features
+### � Phase 4: Reader Refinement (In Progress)
+- [ ] Advanced reader settings (Gapless, Double-page)
+- [ ] Performance optimization for long-strip webtoons
+- [ ] Improved touch gestures
 
-### 🔮 Phase 5: Ecosystem Expansion
-- [ ] Cloud sync
-- [ ] Multi-device progress
-- [ ] Plugin system
+### 🔮 Phase 5: Ecosystem
+- [ ] Cloud sync via self-hosted server
 - [ ] Mobile companion app
+- [ ] Plugin system for custom sources
 
 ---
 
@@ -171,24 +150,9 @@ flowmamga/
 Create a `.env` file in the root directory:
 
 ```env
-# App Configuration
 VITE_APP_NAME=FlowManga
-VITE_APP_VERSION=2.0.0
-
-# Optional: Web Scraper Settings
-VITE_ENABLE_WEB_SOURCES=true
+VITE_APP_VERSION=2.1.0
 ```
-
-### Keyboard Shortcuts
-| Action | Shortcut |
-|--------|----------|
-| Next Page | `→` or `Space` |
-| Previous Page | `←` or `Shift+Space` |
-| Toggle Fullscreen | `F11` |
-| Open Library | `Ctrl+L` |
-| Toggle Auto-Scroll | `Ctrl+A` |
-| Zoom In | `Ctrl++` |
-| Zoom Out | `Ctrl+-` |
 
 ---
 
@@ -210,14 +174,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 🙏 Acknowledgments
-
-- Built with modern web technologies and best practices
-- Inspired by the manga reading community
-- Special thanks to all contributors and testers
-
----
-
 <div align="center">
 
 ### 👨‍💻 Created by **Djon StNix**
@@ -232,6 +188,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Status**: Production Ready 🚀 | **Version**: 2.0.0
+**Status**: Alpha 🚀 | **Version**: 2.1.0
 
 </div>

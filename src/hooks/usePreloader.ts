@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useReadingStore } from '../stores/useReadingStore';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 export const usePreloader = (windowSize: number = 3) => {
     const { images, currentIndex } = useReadingStore();
@@ -9,20 +10,19 @@ export const usePreloader = (windowSize: number = 3) => {
 
         const preloadImage = (src: string) => {
             const img = new Image();
-            img.src = src.startsWith('http') ? src : `media:///${src}`;
+            img.src = src.startsWith('http') ? src : convertFileSrc(src);
         };
 
-        // Determine range to preload
-        // We want to preload:
-        // - Next 'windowSize' images
-        // - Previous 1 image (for quick back navigation)
-        
-        const start = Math.max(0, currentIndex - 1);
+        // Preload Window: Current + next few
+        const start = currentIndex;
         const end = Math.min(images.length - 1, currentIndex + windowSize);
 
         for (let i = start; i <= end; i++) {
-            if (i === currentIndex) continue; // Already rendered
             preloadImage(images[i]);
         }
+
+        // Cleanup/Unload logic would go here if we were managing a custom cache,
+        // but browsers handle image GC pretty well. 
+        // We focus on ensuring the NEXT few are hot in memory.
     }, [currentIndex, images, windowSize]);
 };

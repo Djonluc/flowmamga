@@ -1,7 +1,7 @@
-
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useReadingStore } from '../stores/useReadingStore';
-import { BookOpen, MonitorPlay, ArrowDown, Camera, Keyboard, Sliders, X } from 'lucide-react';
+import { useTrackerStore } from '../stores/useTrackerStore';
+import { BookOpen, MonitorPlay, ArrowDown, Camera, Keyboard, Sliders, X, Compass, Zap } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -61,35 +61,74 @@ export const ControlPanel = () => {
 
           <div className="space-y-6 overflow-y-auto max-h-[70vh] pr-2 custom-scrollbar">
             {/* Theme & Volume always visible */}
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Theme</span>
-                    <div className="flex gap-1.5">
-                        {(['dark', 'light', 'oled', 'paper', 'cyberpunk'] as const).map((t) => (
-                            <button 
-                                key={t}
-                                onClick={() => setTheme(t)} 
-                                className={`w-6 h-6 rounded-full border border-white/10 transition-transform hover:scale-110 ${theme === t ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : ''}`}
-                                style={{ background: t === 'dark' ? '#222' : t === 'light' ? '#fff' : t === 'oled' ? '#000' : t === 'paper' ? '#f5f5dc' : '#0ff' }}
-                                title={t}
-                            />
-                        ))}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Theme</span>
+                        <div className="flex gap-1.5">
+                            {(['dark', 'light', 'oled', 'paper', 'cyberpunk'] as const).map((t) => (
+                                <button 
+                                    key={t}
+                                    onClick={() => setTheme(t)} 
+                                    className={`w-6 h-6 rounded-full border border-white/10 transition-transform hover:scale-110 ${theme === t ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : ''}`}
+                                    style={{ background: t === 'dark' ? '#222' : t === 'light' ? '#fff' : t === 'oled' ? '#000' : t === 'paper' ? '#f5f5dc' : '#0ff' }}
+                                    title={t}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                         <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Immersive Mode</span>
+                         <button 
+                            onClick={() => useSettingsStore.getState().toggleFullScreenAction()}
+                            className={clsx(
+                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                                useSettingsStore.getState().isFullscreen 
+                                    ? "bg-green-600 text-white shadow-lg shadow-green-500/30" 
+                                    : "bg-white/5 text-neutral-400 hover:text-white"
+                            )}
+                         >
+                             {useSettingsStore.getState().isFullscreen ? 'ON' : 'OFF'}
+                         </button>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider flex justify-between">
+                            <span>Ambient Soundscape</span>
+                            <span>{Math.round(ambientVolume * 100)}%</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-2 p-2 bg-white/5 rounded-2xl border border-white/5 mb-3">
+                            {(['none', 'lofi', 'rain', 'cafe', 'wind', 'space'] as const).map((s) => (
+                                <button
+                                    key={s}
+                                    onClick={() => useSettingsStore.getState().setSelectedAmbientSound(s)}
+                                    className={clsx(
+                                        "flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all border",
+                                        useSettingsStore.getState().selectedAmbientSound === s 
+                                            ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20" 
+                                            : "bg-white/[0.02] border-transparent text-neutral-500 hover:text-neutral-300 hover:bg-white/[0.05]"
+                                    )}
+                                >
+                                    <div className="opacity-80">
+                                        {s === 'none' && <X size={14} />}
+                                        {s === 'lofi' && <MonitorPlay size={14} />}
+                                        {s === 'rain' && <div className="w-1 h-3 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />}
+                                        {s === 'cafe' && <BookOpen size={14} />}
+                                        {s === 'wind' && <Compass size={14} className="animate-spin-slow" />}
+                                        {s === 'space' && <Zap size={14} className="animate-pulse" />}
+                                    </div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest">{s === 'none' ? 'Silence' : s}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <input 
+                        type="range" min="0" max="1" step="0.05"
+                        value={ambientVolume}
+                        onChange={(e) => setAmbientVolume(parseFloat(e.target.value))}
+                        className="w-full accent-white h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                        />
                     </div>
                 </div>
-
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider flex justify-between">
-                        <span>Ambience</span>
-                        <span>{Math.round(ambientVolume * 100)}%</span>
-                    </label>
-                    <input 
-                    type="range" min="0" max="1" step="0.05"
-                    value={ambientVolume}
-                    onChange={(e) => setAmbientVolume(parseFloat(e.target.value))}
-                    className="w-full accent-white h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer"
-                    />
-                </div>
-            </div>
 
             {/* Reading Settings - only if in reader */}
             {images.length > 0 ? (
@@ -134,26 +173,58 @@ export const ControlPanel = () => {
                         </div>
                     </div>
 
-                    {readingMode === 'vertical' && (
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Gap Size: {gapSize}px</label>
-                                <input 
-                                    type="range" min="0" max="100" value={gapSize} 
-                                    onChange={(e) => setGapSize(Number(e.target.value))}
-                                    className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-white"
-                                />
+                    {/* Auto-Advance / Auto-Scroll Section */}
+                    <div className="space-y-4 pt-4 border-t border-white/10">
+                        {readingMode === 'vertical' ? (
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Gap Size: {gapSize}px</label>
+                                    <input 
+                                        type="range" min="0" max="100" value={gapSize} 
+                                        onChange={(e) => setGapSize(Number(e.target.value))}
+                                        className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-white"
+                                    />
+                                </div>
+                                
+                                <div className="space-y-3 p-3 bg-white/5 rounded-xl border border-white/5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold text-neutral-300 uppercase tracking-tight">Auto-Scroll</label>
+                                        <button 
+                                            onClick={useSettingsStore.getState().toggleAutoScrolling}
+                                            className={clsx(
+                                                "px-3 py-1 rounded-full text-[10px] font-bold transition-all",
+                                                useSettingsStore.getState().isAutoScrolling 
+                                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30" 
+                                                    : "bg-white/10 text-neutral-400"
+                                            )}
+                                        >
+                                            {useSettingsStore.getState().isAutoScrolling ? 'ACTIVE' : 'START'}
+                                        </button>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[10px] text-neutral-500">
+                                            <span>Scroll Speed</span>
+                                            <span>{useSettingsStore.getState().autoScrollSpeed}px</span>
+                                        </div>
+                                        <input 
+                                            type="range" min="0.5" max="10" step="0.5" 
+                                            value={useSettingsStore.getState().autoScrollSpeed} 
+                                            onChange={(e) => useSettingsStore.getState().setAutoScrollSpeed(Number(e.target.value))}
+                                            className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-500"
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                            
+                        ) : (
                             <div className="space-y-3 p-3 bg-white/5 rounded-xl border border-white/5">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-xs font-bold text-neutral-300 uppercase tracking-tight">Auto-Scroll</label>
+                                    <label className="text-xs font-bold text-neutral-300 uppercase tracking-tight">Auto-Advance</label>
                                     <button 
                                         onClick={useSettingsStore.getState().toggleAutoScrolling}
                                         className={clsx(
                                             "px-3 py-1 rounded-full text-[10px] font-bold transition-all",
                                             useSettingsStore.getState().isAutoScrolling 
-                                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30" 
+                                                ? "bg-purple-600 text-white shadow-lg shadow-purple-500/30" 
                                                 : "bg-white/10 text-neutral-400"
                                         )}
                                     >
@@ -162,22 +233,22 @@ export const ControlPanel = () => {
                                 </div>
                                 <div className="space-y-1">
                                     <div className="flex justify-between text-[10px] text-neutral-500">
-                                        <span>Scroll Speed</span>
-                                        <span>{useSettingsStore.getState().autoScrollSpeed}px</span>
+                                        <span>Interval Speed</span>
+                                        <span>{useSettingsStore.getState().slideshowInterval / 1000}s</span>
                                     </div>
                                     <input 
-                                        type="range" min="0.5" max="10" step="0.5" 
-                                        value={useSettingsStore.getState().autoScrollSpeed} 
-                                        onChange={(e) => useSettingsStore.getState().setAutoScrollSpeed(Number(e.target.value))}
-                                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-500"
+                                        type="range" min="1000" max="10000" step="500" 
+                                        value={useSettingsStore.getState().slideshowInterval} 
+                                        onChange={(e) => useSettingsStore.getState().setSlideshowInterval(Number(e.target.value))}
+                                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
                                     />
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     {readingMode === 'single' && (
-                        <div className="space-y-2">
+                        <div className="space-y-2 pt-4">
                             <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Direction</label>
                             <div className="flex bg-white/5 p-1 rounded-lg">
                                 <button
@@ -236,13 +307,115 @@ export const ControlPanel = () => {
                                 />
                             </div>
                         ))}
-                    </div>
+                </div>
                 </div>
             ) : (
                 <div className="py-8 text-center border-t border-white/10">
                     <p className="text-xs text-neutral-500 italic">Open a book to see reading controls</p>
                 </div>
             )}
+            
+            {/* Trackers Section */}
+            <div className="space-y-4 pt-4 border-t border-white/10">
+                <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Trackers</label>
+                <div className="space-y-3">
+                    {/* Anilist */}
+                    <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            {useTrackerStore.getState().anilistUser?.avatar ? (
+                                <img 
+                                    src={useTrackerStore.getState().anilistUser?.avatar} 
+                                    alt="Avatar" 
+                                    className="w-8 h-8 rounded-lg object-cover border border-white/10"
+                                />
+                            ) : (
+                                <div className="w-8 h-8 bg-[#02A9FF] rounded-lg flex items-center justify-center font-bold text-white">AL</div>
+                            )}
+                            <div>
+                                <div className="text-xs font-bold text-white">
+                                    {useTrackerStore.getState().anilistUser?.name || 'Anilist'}
+                                </div>
+                                <div className="text-[10px] text-neutral-500">
+                                    {useTrackerStore.getState().anilistToken ? 'Connected' : 'Not Connected'}
+                                </div>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => {
+                                if (useTrackerStore.getState().anilistToken) {
+                                    if (confirm('Disconnect Anilist?')) {
+                                        useTrackerStore.getState().setAnilistToken(null);
+                                    }
+                                } else {
+                                    const token = prompt("Enter your Anilist Personal Access Token:");
+                                    if (token) useTrackerStore.getState().setAnilistToken(token);
+                                }
+                            }}
+                            className={clsx(
+                                "px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors",
+                                useTrackerStore.getState().anilistToken ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
+                            )}
+                        >
+                            {useTrackerStore.getState().anilistToken ? 'Disconnect' : 'Connect'}
+                        </button>
+                    </div>
+
+                    {/* MyAnimeList */}
+                    <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between grayscale opacity-50 cursor-not-allowed" title="Coming Soon">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-[#2E51A2] rounded-lg flex items-center justify-center font-bold text-white">MAL</div>
+                            <div>
+                                <div className="text-xs font-bold text-white">MyAnimeList</div>
+                                <div className="text-[10px] text-neutral-500">Coming Soon</div>
+                            </div>
+                        </div>
+                        <button className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-white/5 text-neutral-500 pointer-events-none">
+                            Connect
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* System Section - Always Visible */}
+            <div className="space-y-4 pt-4 border-t border-white/10">
+                <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">System</label>
+                <div className="grid grid-cols-2 gap-2">
+                        <button
+                        onClick={async () => {
+                            try {
+                                // Dynamic import to avoid build errors if package missing
+                                // @ts-ignore
+                                const { check } = await import('@tauri-apps/plugin-updater');
+                                const update = await check();
+                                if (update?.available) {
+                                    if (confirm(`Update ${update.version} is available! Download and install?`)) {
+                                        await update.downloadAndInstall();
+                                    }
+                                } else {
+                                    alert('You are on the latest version.');
+                                }
+                            } catch (e) {
+                                console.error(e);
+                                alert('checkForUpdates failed (Updater not configured in tauri.conf.json?)');
+                            }
+                        }}
+                        className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Zap size={14} /> Check Updates
+                        </button>
+                        <button
+                        onClick={() => {
+                            if (confirm('This will reset all local settings and cache. Are you sure?')) {
+                                localStorage.clear();
+                                window.location.reload();
+                            }
+                        }}
+                        className="px-3 py-2 bg-white/5 hover:bg-red-500/20 hover:text-red-400 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Sliders size={14} /> Reset App
+                        </button>
+                </div>
+            </div>
           </div>
         </motion.div>
       )}

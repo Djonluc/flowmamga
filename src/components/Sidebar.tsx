@@ -1,187 +1,185 @@
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useReadingStore } from '../stores/useReadingStore';
-import { Home, Library, FolderOpen, Activity, Settings, Menu, X } from 'lucide-react';
+import { Home, Library, FolderOpen, Activity, Settings, Zap, Film, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
+import clsx from 'clsx';
 
 export const Sidebar = () => {
     const { 
-        sidebarOpen, theme, isHudVisible, activeView, setActiveView,
-        isSettingsOpen, toggleSettings 
+        sidebarOpen, toggleSidebar, activeView, setActiveView,
+        isSettingsOpen, toggleSettings
     } = useSettingsStore();
 
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-    // If sidebar is globally closed via setting, don't show. 
-    // If HUD is hidden (immersive mode), hide temporarily.
-    const isVisible = sidebarOpen && isHudVisible;
+    const [isHovered, setIsHovered] = useState(false);
+    // Intelligent open state: Open if locked open OR hovered
+    const isOpen = sidebarOpen || isHovered;
 
     const navItems = [
-        { icon: <Home size={24} />, label: 'Home', view: 'home' as const },
-        { icon: <Library size={24} />, label: 'Full Library', view: 'library' as const },
-        { icon: <Activity size={24} />, label: 'Stats', view: 'analytics' as const },
+        { icon: <Home size={20} />, label: 'Home', view: 'home' as const },
+        { icon: <Library size={20} />, label: 'Library', view: 'library' as const },
+        { icon: <Film size={20} />, label: 'Videos', view: 'videos' as const },
+        { icon: <Clock size={20} />, label: 'History', view: 'history' as const },
+        { icon: <Activity size={20} />, label: 'Analytics', view: 'analytics' as const },
     ];
 
     const handleQuickOpen = async () => {
-        if (window.electron) {
-            try {
-                const path = await window.electron.openFolder();
-                if (path) {
-                    const images = await window.electron.readFolder(path);
-                    if (images && images.length > 0) {
-                        console.log('[Sidebar] Quick opening folder:', path);
-                        useReadingStore.getState().openFolder(path, images);
-                        setMobileMenuOpen(false);
-                    } else {
-                        alert("No images found in this folder.");
-                    }
+        try {
+            const path = await open({
+                directory: true,
+                multiple: false
+            });
+
+            if (path && typeof path === 'string') {
+                const images: string[] = await invoke('read_folder', { path });
+                if (images && images.length > 0) {
+                    useReadingStore.getState().openFolder(path);
                 }
-            } catch (err) {
-                console.error("Quick open failed", err);
             }
+        } catch (err) {
+            console.error("Quick open failed", err);
         }
     };
 
     return (
         <>
-            {/* Mobile Menu Button */}
-            <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden fixed top-4 left-4 z-50 p-3 bg-black/80 backdrop-blur-md rounded-full border border-white/10 hover:bg-black/90 transition-colors"
-            >
-                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-
-            {/* Mobile Menu Overlay */}
-            <AnimatePresence>
-                {mobileMenuOpen && (
-                    <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-                        />
-                        <motion.div
-                            initial={{ x: -300 }}
-                            animate={{ x: 0 }}
-                            exit={{ x: -300 }}
-                            transition={{ type: 'spring', damping: 25 }}
-                            className="md:hidden fixed left-0 top-0 bottom-0 w-64 bg-neutral-900 border-r border-white/10 z-50 flex flex-col pt-20 px-4 gap-4"
-                        >
-                            {navItems.map((item) => (
-                                <button
-                                    key={item.view}
-                                    onClick={() => {
-                                        setActiveView(item.view);
-                                        setMobileMenuOpen(false);
-                                    }}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                                        activeView === item.view
-                                            ? 'bg-white/10 text-white'
-                                            : 'text-neutral-400 hover:bg-white/5 hover:text-white'
-                                    }`}
-                                >
-                                    {item.icon}
-                                    <span className="font-medium">{item.label}</span>
-                                </button>
-                            ))}
-                            
-                            <button
-                                onClick={handleQuickOpen}
-                                className="flex items-center gap-3 px-4 py-3 rounded-lg text-neutral-400 hover:bg-white/5 hover:text-white transition-colors"
-                            >
-                                <FolderOpen size={24} />
-                                <span className="font-medium">Quick Open Folder</span>
-                            </button>
-
-                            <div className="mt-auto pb-8">
-                                <button
-                                    onClick={() => {
-                                        toggleSettings();
-                                        setMobileMenuOpen(false);
-                                    }}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors w-full ${
-                                        isSettingsOpen
-                                            ? 'bg-white/10 text-white'
-                                            : 'text-neutral-400 hover:bg-white/5 hover:text-white'
-                                    }`}
-                                >
-                                    <Settings size={24} />
-                                    <span className="font-medium">Settings</span>
-                                </button>
-                            </div>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
-
-            {/* Desktop Sidebar */}
+            {/* Desktop Intelligent Sidebar */}
             <motion.div 
-                initial={{ x: -80, opacity: 0 }}
-                animate={{ x: isVisible ? 0 : -80, opacity: isVisible ? 1 : 0 }}
-                transition={{ duration: 0.3 }}
-                className={`
-                    hidden md:flex flex-col w-20 h-full border-r border-white/10 pt-20 items-center gap-8 z-40
-                    ${theme === 'oled' ? 'bg-black' : 'bg-black/20 backdrop-blur-md'}
-                `}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                initial={false}
+                animate={{ 
+                    width: isOpen ? 240 : 70,
+                }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className={clsx(
+                    "hidden md:flex flex-col h-full z-40 relative group",
+                    "border-r border-border-subtle bg-background/95 backdrop-blur-3xl"
+                )}
             >
-                <NavIcon 
-                    icon={<Home size={24} />} 
-                    active={activeView === 'home'} 
-                    onClick={() => setActiveView('home')}
-                    label="Home"
-                />
-                <NavIcon 
-                    icon={<Library size={24} />} 
-                    active={activeView === 'library'} 
-                    onClick={() => setActiveView('library')}
-                    label="Full Library"
-                />
-                <NavIcon 
-                    icon={<FolderOpen size={24} />} 
-                    onClick={handleQuickOpen}
-                    label="Quick Open Folder"
-                />
-                <NavIcon 
-                    icon={<Activity size={24} />} 
-                    active={activeView === 'analytics'} 
-                    onClick={() => setActiveView('analytics')}
-                    label="Stats"
-                />
-                
-                <div className="mt-auto pb-8">
-                    <NavIcon 
-                        icon={<Settings size={24} />} 
+                {/* Logo / Header */}
+                <div className="h-16 flex items-center px-4 mb-2 overflow-hidden flex-shrink-0">
+                   <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 flex-shrink-0 relative z-10">
+                            <Zap size={20} fill="currentColor" className="text-white" />
+                       </div>
+                       
+                       <motion.div 
+                           animate={{ opacity: isOpen ? 1 : 0, x: isOpen ? 0 : -20 }}
+                           className="flex flex-col whitespace-nowrap"
+                       >
+                           <span className="font-bold text-base tracking-tight text-white leading-none">
+                                FLOW<span className="text-indigo-400">MANGA</span>
+                           </span>
+                           <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-medium leading-none mt-1">
+                                Media Engine
+                           </span>
+                       </motion.div>
+                   </div>
+                </div>
+
+                {/* Navigation Items */}
+                <div className="flex-1 flex flex-col gap-1 px-3">
+                    <div className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider px-3 py-2 opacity-0 transition-opacity duration-300" style={{ opacity: isOpen ? 1 : 0 }}>
+                        Menu
+                    </div>
+
+                    {navItems.map((item) => (
+                        <NavButton 
+                            key={item.view}
+                            icon={item.icon} 
+                            label={item.label} 
+                            expanded={isOpen}
+                            active={activeView === item.view} 
+                            onClick={() => {
+                                useReadingStore.getState().reset();
+                                setActiveView(item.view);
+                            }}
+                        />
+                    ))}
+
+                    <div className="my-2 h-[1px] bg-white/5 mx-2" />
+
+                    <NavButton 
+                        icon={<FolderOpen size={20} />} 
+                        label="Quick Open" 
+                        expanded={isOpen}
+                        onClick={handleQuickOpen}
+                    />
+                </div>
+
+                {/* Bottom Actions */}
+                <div className="p-3 mt-auto">
+                    <NavButton 
+                        icon={<Settings size={20} />} 
+                        label="Settings" 
+                        expanded={isOpen}
                         active={isSettingsOpen}
                         onClick={toggleSettings}
-                        label="Settings"
                     />
+                    
+                    {/* Toggle Lock - Only visible when hovered/expanded to allow locking open */}
+                    <AnimatePresence>
+                        {isOpen && (
+                            <motion.button
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={toggleSidebar}
+                                className={clsx(
+                                    "mt-2 w-full flex items-center justify-center py-2 rounded-lg text-xs font-medium transition-colors",
+                                    sidebarOpen 
+                                        ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" 
+                                        : "text-neutral-500 hover:text-neutral-300 hover:bg-white/5"
+                                )}
+                            >
+                                {sidebarOpen ? "Sidebar Locked" : "Auto-Collapse"}
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
                 </div>
             </motion.div>
         </>
     );
 };
 
-const NavIcon = ({ icon, active, onClick, label }: { icon: React.ReactNode, active?: boolean, onClick?: () => void, label?: string }) => (
+const NavButton = ({ icon, label, active, onClick, expanded }: { icon: React.ReactNode, label: string, active?: boolean, onClick?: () => void, expanded: boolean }) => (
     <button 
         onClick={onClick}
-        title={label}
-        className={`
-            relative p-4 rounded-xl transition-all duration-200 group
-            ${active ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-white hover:bg-white/5'}
-        `}
+        className={clsx(
+            "group relative flex items-center h-11 w-full rounded-lg transition-all duration-200 outline-none",
+            active 
+              ? 'bg-surface-elevated text-white' 
+              : 'text-neutral-400 hover:text-white hover:bg-white/5'
+        )}
     >
-        {icon}
+        {/* Active Indicator Strip (Vertical Pill) */}
         {active && (
             <motion.div 
-                layoutId="activeIndicator"
-                className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-full"
+                layoutId="activeStrip"
+                className="absolute left-0 top-2 bottom-2 w-1 bg-accent rounded-r-full shadow-[0_0_12px_var(--color-accent-glow)]"
             />
         )}
-        <span className="absolute left-full ml-4 px-3 py-2 bg-black/90 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+
+        {/* Icon Container - consistently sized to ensure alignment */}
+        <div className="w-[48px] flex items-center justify-center flex-shrink-0 z-10">
+            {icon}
+        </div>
+        
+        {/* Label - fades in/out based on expansion */}
+        <motion.span 
+            initial={false}
+            animate={{ 
+                opacity: expanded ? 1 : 0, 
+                x: expanded ? 0 : -10,
+                display: expanded ? 'block' : 'none'
+            }}
+            transition={{ duration: 0.2 }}
+            className="font-medium text-sm whitespace-nowrap"
+        >
             {label}
-        </span>
+        </motion.span>
     </button>
 );

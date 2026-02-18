@@ -1,93 +1,139 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useReadingStore } from '../../stores/useReadingStore';
-import { useSettingsStore } from '../../stores/useSettingsStore';
-import { ZoomIn, ZoomOut, Maximize, Play, Pause } from 'lucide-react';
+import { useReaderStore } from '../../stores/useReaderStore';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { SmartImage } from '../SmartImage';
+import { motion } from 'framer-motion';
 
 export const VerticalReader = () => {
   const { images } = useReadingStore();
-  const { gapSize, isAutoScrolling, autoScrollSpeed, toggleAutoScrolling } = useSettingsStore();
-  const [scale, setScale] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const requestRef = useRef<number>(null);
-
-  // Simple zoom controls
-  const handleZoomIn = () => setScale(prev => Math.min(prev + 0.1, 3));
-  const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.5));
-  const handleFitWidth = () => setScale(1);
-
-  // Auto-scroll logic
+  const { autoScroll, scrollSpeed, setAutoScroll } = useReaderStore();
+  const readerRef = useRef<HTMLDivElement>(null);
+  
+  // V2 AUTO-SCROLL ENGINE
   useEffect(() => {
-    const scroll = () => {
-      if (containerRef.current && isAutoScrolling) {
-        containerRef.current.scrollTop += autoScrollSpeed;
-        
-        // Stop if we reach the end
-        if (containerRef.current.scrollTop + containerRef.current.clientHeight >= containerRef.current.scrollHeight) {
-          toggleAutoScrolling();
-          return;
+    if (!autoScroll || !readerRef.current) return;
+
+    let frameId: number;
+    let lastTime = performance.now();
+
+    const scrollStep = (time: number) => {
+        const delta = time - lastTime;
+        lastTime = time;
+
+        const pixels = (scrollSpeed / 1000) * delta;
+        const container = readerRef.current!;
+        const maxScroll = container.scrollHeight - container.clientHeight;
+
+        if (container.scrollTop >= maxScroll - 1) {
+            setAutoScroll(false);
+            return;
         }
+
+        container.scrollTop += pixels;
+        frameId = requestAnimationFrame(scrollStep);
+    };
+
+    frameId = requestAnimationFrame(scrollStep);
+    return () => cancelAnimationFrame(frameId);
+  }, [autoScroll, scrollSpeed, setAutoScroll]);
+
+  // PAUSE ON USER INTERACTION
+  useEffect(() => {
+      const stop = () => {
+          if (useReaderStore.getState().autoScroll) {
+              setAutoScroll(false);
+          }
+      };
+
+      const container = readerRef.current;
+      container?.addEventListener("wheel", stop);
+      container?.addEventListener("touchstart", stop);
+      container?.addEventListener("mousedown", stop);
+
+      return () => {
+          container?.removeEventListener("wheel", stop);
+          container?.removeEventListener("touchstart", stop);
+          container?.removeEventListener("mousedown", stop);
+      };
+  }, [setAutoScroll]);
+
+  // Scroll to top on chapter change (Prevent infinite loop at bottom)
+  useEffect(() => {
+      if (readerRef.current) {
+          readerRef.current.scrollTo({ top: 0, behavior: 'auto' });
       }
-      requestRef.current = requestAnimationFrame(scroll);
-    };
-
-    if (isAutoScrolling) {
-      requestRef.current = requestAnimationFrame(scroll);
-    } else if (requestRef.current) {
-      cancelAnimationFrame(requestRef.current);
-    }
-
-    return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    };
-  }, [isAutoScrolling, autoScrollSpeed, toggleAutoScrolling]);
+  }, [images]);
 
   return (
-    <div className="w-full h-full relative group">
-      {/* Floating Controls (Fade in on hover) */}
-      <div className="absolute top-4 right-8 flex flex-col gap-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-2 rounded-lg backdrop-blur-sm border border-white/10">
-        <button 
-          onClick={toggleAutoScrolling} 
-          className={`p-2 rounded transition-colors ${isAutoScrolling ? 'bg-blue-600' : 'hover:bg-white/20'} text-white`} 
-          title={isAutoScrolling ? "Pause Auto-scroll" : "Start Auto-scroll"}
-        >
-          {isAutoScrolling ? <Pause size={20} /> : <Play size={20} />}
-        </button>
-        <div className="h-px bg-white/10 mx-1" />
-        <button onClick={handleZoomIn} className="p-2 hover:bg-white/20 rounded text-white" title="Zoom In">
-          <ZoomIn size={20} />
-        </button>
-        <button onClick={handleZoomOut} className="p-2 hover:bg-white/20 rounded text-white" title="Zoom Out">
-          <ZoomOut size={20} />
-        </button>
-        <button onClick={handleFitWidth} className="p-2 hover:bg-white/20 rounded text-white" title="Fit Width">
-          <Maximize size={20} />
-        </button>
-      </div>
+    <div 
+        ref={readerRef} 
+        className="reader-scroll w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center bg-black select-none no-scrollbar"
+        style={{ scrollBehavior: 'auto' }} 
+    >
+      {images.map((imagePath, index) => {
+        const nextImage = images[index + 1];
+        const isBoundary = nextImage && !nextImage.split('/').slice(0, -1).join('/').includes(imagePath.split('/').slice(0, -1).join('/'));
 
-      <div 
-        ref={containerRef}
-        className="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center custom-scrollbar pb-20 select-none"
-        style={{ gap: `${gapSize}px` }}
-        onWheel={() => {
-            if (isAutoScrolling) toggleAutoScrolling();
-        }}
-      >
-        {images.map((imagePath, index) => (
-          <SmartImage
-            key={imagePath}
-            src={imagePath.startsWith('http') ? imagePath : `media:///${imagePath}`}
-            alt={`Page ${index + 1}`}
-            className="shadow-2xl transition-all duration-200 ease-out origin-top border border-white/5"
-            style={{ 
-              maxWidth: useSettingsStore.getState().fitMode === 'width' ? `${100 * scale}%` : 'none',
-              maxHeight: useSettingsStore.getState().fitMode === 'height' ? `${100 * scale}vh` : 'none',
-              width: useSettingsStore.getState().fitMode === 'width' ? `${100 * scale}%` : 'auto',
-              height: 'auto',
-            }} 
-          />
-        ))}
+        return (
+          <React.Fragment key={imagePath}>
+            <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true, margin: "200px" }}
+                className="w-full flex justify-center py-2"
+            >
+                <SmartImage
+                    src={imagePath.startsWith('http') ? imagePath : convertFileSrc(imagePath)}
+                    alt={`Page ${index + 1}`}
+                    className="max-w-full h-auto object-contain shadow-2xl transition-transform duration-700"
+                />
+            </motion.div>
+
+            {isBoundary && (
+              <div className="w-full py-24 flex flex-col items-center justify-center relative overflow-hidden group">
+                <div className="absolute inset-0 bg-blue-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                <div className="w-px h-16 bg-gradient-to-b from-transparent via-blue-500/50 to-transparent mb-6" />
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center gap-2 z-10"
+                >
+                  <p className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.5em] mb-2">Boundary Reached</p>
+                  <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter flex items-center gap-4">
+                    Chapter Complete <span className="text-blue-500">→</span> Next Unit
+                  </h3>
+                </motion.div>
+                <div className="w-px h-16 bg-gradient-to-b from-transparent via-blue-500/50 to-transparent mt-6" />
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+      
+      <div className="py-60 flex flex-col items-center opacity-20">
+          <div className="w-12 h-1 bg-white/20 rounded-full mb-4" />
+          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white">Archive Edge</p>
       </div>
+      
+      {/* Sentinel for Next Chapter Trigger */}
+      <BottomTrigger onTrigger={() => useReadingStore.getState().goToNextChapter()} />
     </div>
   );
+};
+
+const BottomTrigger = ({ onTrigger }: { onTrigger: () => void }) => {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) {
+                onTrigger();
+            }
+        }, { rootMargin: '200px' });
+        
+        if (ref.current) observer.observe(ref.current);
+        return () => observer.disconnect();
+    }, [onTrigger]);
+
+    return <div ref={ref} className="h-4 w-full" />;
 };

@@ -1,74 +1,117 @@
+import { Layout } from './components/Layout';
 import { Reader } from './components/Reader'
 import { ControlPanel } from './components/ControlPanel'
 import { LibraryGrid } from './components/LibraryGrid'
 import { useReadingStore } from './stores/useReadingStore'
 // import { useLibraryStore } from './stores/useLibraryStore'
 import { useSettingsStore } from './stores/useSettingsStore'
-import { Sidebar } from './components/Sidebar';
-import { AmbientBackground } from './components/AmbientBackground';
-import { AmbientSoundPlayer } from './components/AmbientSoundPlayer';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
-import { ShortcutsManager } from './components/ShortcutsManager';
-import { ShortcutsGuide } from './components/ShortcutsGuide';
-import { TitleBar } from './components/TitleBar'
-import { ArrowLeft } from 'lucide-react'
+// import { ArrowLeft } from 'lucide-react'
 import { useLibraryEvents } from './hooks/useLibraryEvents'
 import { useAdaptiveColor } from './hooks/useAdaptiveColor'
 import { useReadingAnalytics } from './hooks/useReadingAnalytics'
-import clsx from 'clsx'
-import './App.css'
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { HomeView } from './components/HomeView';
-import { ToastContainer } from './components/Toast';
+import { VideoLibrary } from './components/video/VideoLibrary';
+import { HistoryView } from './components/HistoryView';
 
 function App() {
-  const { reset, images } = useReadingStore()
-  // const { libraryPath, isLoading } = useLibraryStore(); // unused now
-  const { theme, activeView, isFullscreen } = useSettingsStore();
+  const { isInitializing } = useSettingsStore();
+
+  if (isInitializing) {
+    return (
+      <div className="h-screen w-screen bg-black flex items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 to-purple-900/20" />
+        <div className="absolute top-0 left-0 w-full h-1 bg-blue-600 animate-pulse" />
+        
+        <div className="z-10 text-center space-y-8 max-w-md px-6">
+          <div className="relative inline-block">
+             <div className="w-24 h-24 border-t-2 border-blue-500 rounded-full animate-spin" />
+             <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-4xl font-black text-white italic tracking-tighter">F</span>
+             </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black text-white tracking-tighter">
+                FLOW<span className="text-blue-500">MANGA</span>
+            </h1>
+            <p className="text-neutral-500 font-medium tracking-widest uppercase text-xs">
+                 Initializing Core Engine
+            </p>
+          </div>
+          
+          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+             <motion.div 
+               className="h-full bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.5)]"
+               initial={{ width: 0 }}
+               animate={{ width: "100%" }}
+               transition={{ duration: 2, repeat: Infinity }}
+             />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <MainContent />;
+}
+
+import { useVideoStore } from './stores/useVideoStore';
+
+
+function MainContent() {
+  const { images } = useReadingStore()
+  const { currentVideo } = useVideoStore();
+  const { activeView } = useSettingsStore();
 
   useLibraryEvents();
   useAdaptiveColor();
   useReadingAnalytics();
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-background text-foreground transition-colors duration-300 relative" data-theme={theme}>
-      <AmbientBackground />
-      <AmbientSoundPlayer />
-      <ShortcutsManager />
-      <ShortcutsGuide />
-      <ToastContainer />
-      {!isFullscreen && <TitleBar />}
-      <div className={clsx(
-          "flex relative z-10 pointer-events-auto transition-all duration-500",
-          isFullscreen ? "h-screen" : "h-[calc(100vh-32px)]"
-      )}>
-        {!isFullscreen && <Sidebar />}
-        <main className="flex-1 relative overflow-hidden">
+    <Layout hideSidebar={images.length > 0 || !!currentVideo}>
+        <AnimatePresence mode="wait">
             {images.length > 0 ? (
-                <>
-                <div className="absolute top-4 left-4 z-50">
-                    <button 
-                    onClick={reset}
-                    className="p-2 bg-black/50 backdrop-blur text-white rounded-full hover:bg-black/80 transition-colors"
-                    title="Back to Library"
-                    >
-                    <ArrowLeft size={20} />
-                    </button>
-                </div>
-                <Reader />
-                </>
-            ) : activeView === 'analytics' ? (
-                <AnalyticsDashboard />
-            ) : activeView === 'home' ? (
-                <HomeView />
+                <motion.div 
+                    key="reader"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="h-full w-full"
+                >
+                    <Reader />
+                </motion.div>
             ) : (
-                <LibraryGrid />
+                <motion.div
+                    key={activeView}
+                    initial={{ opacity: 0, scale: 0.99 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 1.01 }}
+                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                    className="h-full w-full"
+                >
+                    {activeView === 'analytics' ? (
+                        <AnalyticsDashboard />
+                    ) : activeView === 'history' ? (
+                        <HistoryView />
+                    ) : activeView === 'home' ? (
+                        <HomeView />
+                    ) : activeView === 'videos' ? (
+                        <VideoLibrary />
+                    ) : (
+                        <LibraryGrid />
+                    )}
+                </motion.div>
             )}
-            <ControlPanel />
-        </main>
-      </div>
-    </div>
+        </AnimatePresence>
+        <ControlPanel />
+        <DownloadIndicator />
+    </Layout>
   )
 }
+
+import { DownloadIndicator } from './components/DownloadIndicator';
 
 export default App

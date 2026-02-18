@@ -8,5 +8,5 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: './', // Essential for Electron to load assets
+  base: './', // Recommended for Tauri to load assets correctly in production
 })

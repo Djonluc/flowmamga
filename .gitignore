@@ -24,4 +24,13 @@ dist-ssr
 *.sln
 *.sw?
 
-/src/generated/prisma
+# Tauri
+src-tauri/target
+src-tauri/gen/schemas
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
